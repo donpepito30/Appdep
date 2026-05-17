@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0e0e0e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bar1" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#4edea3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#006c49;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bar2" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#4edea3;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#4edea3;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bar3" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#4edea3;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#4edea3;stop-opacity:0.9" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Escudo de fondo -->
+  <path d="M32 4 L56 12 L56 36 C56 48 44 56 32 60 C20 56 8 48 8 36 L8 12 Z" 
+        fill="url(#bg)" 
+        stroke="#4edea3" 
+        stroke-width="1.5" 
+        stroke-linejoin="round"/>
+  
+  <!-- Barras de gráfico (análisis) -->
+  <!-- Barra izquierda (baja) -->
+  <rect x="18" y="38" width="6" height="8" rx="1" fill="url(#bar3)" />
+  <!-- Barra central (media) -->
+  <rect x="27" y="30" width="6" height="16" rx="1" fill="url(#bar2)" />
+  <!-- Barra derecha (alta) - la más importante -->
+  <rect x="36" y="22" width="6" height="24" rx="1" fill="url(#bar1)" />
+  
+  <!-- "PB" texto integrado -->
+  <text x="32" y="18" 
+        font-family="'Lexend', 'Inter', 'Segoe UI', sans-serif" 
+        font-size="11" 
+        font-weight="900" 
+        fill="#4edea3" 
+        text-anchor="middle"
+        letter-spacing="1">
+    PB
+  </text>
+  
+  <!-- Línea de precisión (horizontal sutil) -->
+  <line x1="14" y1="48" x2="46" y2="48" 
+        stroke="#4edea3" 
+        stroke-width="0.5" 
+        stroke-opacity="0.3" 
+        stroke-dasharray="2,2"/>
+</svg>
