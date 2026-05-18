@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { api, getImgUrl } from '../services/api';
 import { MessageSquare, Tv, Crosshair, RefreshCw, AlertCircle, PlayCircle, ExternalLink, Globe } from 'lucide-react';
-import { cn } from '../types';
+import { cn, Broadcast } from '../types';
 
 export function SocialTab({ eventId }: { eventId: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -81,16 +81,18 @@ export function SocialTab({ eventId }: { eventId: string }) {
 }
 
 export function BroadcastsTab({ eventId }: { eventId: string }) {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    api.getBroadcasts(eventId).then(data => {
+    api.getEventBroadcasts(eventId).then(data => {
       if (active) {
         setItems(data || []);
         setLoading(false);
       }
+    }).catch(() => {
+      if (active) setLoading(false);
     });
     return () => { active = false; };
   }, [eventId]);
@@ -99,7 +101,7 @@ export function BroadcastsTab({ eventId }: { eventId: string }) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-brand-text-muted space-y-4">
         <RefreshCw className="w-8 h-8 animate-spin text-brand-green" />
-        <p className="text-[10px] uppercase font-bold tracking-widest">Buscando Canales de TV...</p>
+        <p className="text-[10px] uppercase font-bold tracking-widest">Sincronizando Satélites...</p>
       </div>
     );
   }
@@ -108,42 +110,62 @@ export function BroadcastsTab({ eventId }: { eventId: string }) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-brand-text-muted space-y-4 bg-brand-bg-card rounded-[2rem] border border-brand-border/30">
         <Tv className="w-12 h-12 opacity-20" />
-        <p className="text-[12px] font-bold text-center">No hay canales de TV registrados para este partido.</p>
-        <p className="text-[10px] text-center max-w-sm">Los derechos de transmisión dependen de tu región y de la licencia oficial de BSD.</p>
+        <p className="text-[12px] font-bold text-center">No hay emisiones confirmadas para este evento.</p>
+        <p className="text-[10px] text-center max-w-sm">Los derechos de TV pueden variar según la localización geográfica y la disponibilidad del proveedor.</p>
       </div>
     );
   }
 
-  // Agrupar por país
+  // Agrupar por país (usando country_code)
   const byCountry = items.reduce((acc, curr) => {
-    const country = curr.country?.name || curr.country || 'Otros';
+    const country = curr.country_code || 'INT';
     if (!acc[country]) acc[country] = [];
     acc[country].push(curr);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, Broadcast[]>);
 
   return (
     <div className="space-y-6">
       {Object.entries(byCountry).map(([country, broadcasts]) => (
-        <div key={country} className="bg-brand-bg-card border border-brand-border/30 rounded-[2rem] overflow-hidden">
-          <div className="bg-white/5 px-6 py-4 border-b border-brand-border/30 flex items-center gap-3">
-            <Globe className="w-5 h-5 text-brand-text-muted" />
-            <h3 className="font-bold text-brand-text-white">{country}</h3>
+        <div key={country} className="bg-brand-bg-card border border-brand-border/30 rounded-[2rem] overflow-hidden shadow-sm">
+          <div className="bg-brand-bg-primary/40 px-6 py-4 border-b border-brand-border/20 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Globe className="w-5 h-5 text-brand-green" />
+              <h3 className="font-black text-[10px] uppercase tracking-widest text-brand-text-white">Cobertura: {country}</h3>
+            </div>
+            <span className="text-[9px] font-mono font-bold text-brand-text-muted bg-white/5 px-2 py-0.5 rounded-full">{broadcasts.length} Canales</span>
           </div>
-          <div className="divide-y divide-brand-border/30">
-            {(broadcasts as any[]).map((b, i) => (
-              <div key={b.id || i} className="p-4 px-6 flex items-center gap-4 hover:bg-white/5 transition-colors">
-                {b.logo || b.channel?.logo ? (
-                  <img src={b.logo || b.channel?.logo} alt={b.channel?.name || 'TV'} className="w-10 h-10 object-contain rounded bg-white/10 p-1" />
-                ) : (
-                  <div className="w-10 h-10 bg-brand-bg-secondary rounded flex items-center justify-center">
-                    <Tv className="w-5 h-5 text-brand-text-muted" />
+          <div className="divide-y divide-brand-border/10">
+            {broadcasts.map((b, i) => (
+              <div key={b.id || i} className="p-5 px-6 flex items-center justify-between hover:bg-white/5 transition-colors group">
+                <div className="flex items-center gap-5">
+                  <div className="w-12 h-12 bg-brand-bg-secondary rounded-2xl flex items-center justify-center border border-white/5 group-hover:scale-105 transition-transform">
+                    <img 
+                      src={getImgUrl('league', b.league_id) || ''} 
+                      onError={(e) => { (e.target as any).src = ''; (e.target as any).style.display = 'none'; }}
+                      className="w-8 h-8 object-contain"
+                    />
+                    <Tv className="w-6 h-6 text-brand-text-muted absolute group-hover:text-brand-green transition-colors" />
                   </div>
-                )}
-                <div className="flex-1">
-                  <div className="font-bold text-sm text-brand-text-white">{b.channel?.name || b.name || 'Canal de TV'}</div>
-                  {b.platform && <div className="text-[10px] text-brand-text-muted uppercase tracking-wider mt-0.5">{b.platform}</div>}
+                  <div className="flex flex-col">
+                    <div className="font-black text-xs text-brand-text-white uppercase tracking-tight">{b.channel_name}</div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-brand-text-muted font-medium">{new Date(b.scheduled_start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="w-1 h-1 bg-brand-border rounded-full" />
+                      <span className="text-[10px] text-brand-green font-bold uppercase tracking-wider">Live HD</span>
+                    </div>
+                  </div>
                 </div>
+                {b.channel_link && (
+                  <a 
+                    href={b.channel_link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="p-3 bg-brand-green/10 text-brand-green rounded-xl hover:bg-brand-green hover:text-black transition-all"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
               </div>
             ))}
           </div>

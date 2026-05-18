@@ -89,6 +89,7 @@ export function useMatchStore() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [v2Predictions, setV2Predictions] = useState<{ event: Event, prediction: Prediction }[]>([]);
 
   // Separate forms state to avoid recalculating unnecessarily within the main polling loop
   const [teamForms, setTeamForms] = useState<{ home: TeamForm | null, away: TeamForm | null }>({ home: null, away: null });
@@ -226,18 +227,20 @@ export function useMatchStore() {
         setLoading(true);
         setApiError(null);
         
-        // Fetch Live and Upcoming concurrently
-        const [events, upcoming] = await Promise.all([
+        // Fetch Live, Upcoming and V2 Predictions concurrently
+        const [events, upcoming, v2Preds] = await Promise.all([
           api.getLiveEvents(),
-          api.getUpcomingEvents()
+          api.getUpcomingEvents(),
+          api.getV2Predictions()
         ]);
 
         if (active) {
           const validEvents = events || [];
           setMatches(validEvents);
           setUpcomingMatches(upcoming || []);
+          setV2Predictions(v2Preds || []);
           
-          fetchMissingData(validEvents.concat(upcoming || []));
+          fetchMissingData(validEvents.concat(upcoming || [], (v2Preds || []).map(p => p.event)));
           
           if (validEvents.length > 0 && !selectedMatchId) {
             setSelectedMatchId(validEvents[0].id);
@@ -352,7 +355,10 @@ export function useMatchStore() {
   useEffect(() => {
     const pollEvents = async () => {
       try {
-        const fresh = await api.getLiveEvents();
+        const [fresh, freshV2] = await Promise.all([
+          api.getLiveEvents(),
+          api.getV2Predictions()
+        ]);
         
         // Filtrar eventos que realmente cambiaron usando last_updated
         const updatedEvents = fresh.filter(e => {
@@ -364,6 +370,10 @@ export function useMatchStore() {
         if (updatedEvents.length > 0) {
           setMatches(fresh);
           fetchMissingData(fresh);
+        }
+
+        if (freshV2 && freshV2.length > 0) {
+          setV2Predictions(freshV2);
         }
       } catch(e) {}
     }
@@ -379,6 +389,19 @@ export function useMatchStore() {
       forms: teamForms
     };
   }, [liveData, slowData, teamForms]);
+  
+  const v2PredictionsWithLogos = useMemo(() => {
+    return v2Predictions.map(p => ({
+      event: {
+        ...p.event,
+        homeTeam: (p.event.homeTeamId ? teamNames[p.event.homeTeamId] : null) || p.event.homeTeam,
+        awayTeam: (p.event.awayTeamId ? teamNames[p.event.awayTeamId] : null) || p.event.awayTeam,
+        homeLogo: p.event.homeLogo || (p.event.homeTeamId ? teamLogos[p.event.homeTeamId] : undefined),
+        awayLogo: p.event.awayLogo || (p.event.awayTeamId ? teamLogos[p.event.awayTeamId] : undefined),
+      },
+      prediction: p.prediction
+    }));
+  }, [v2Predictions, teamLogos, teamNames]);
 
   /**
    * Calculates market probabilities for a match using Poisson or existing data.
@@ -390,16 +413,35 @@ export function useMatchStore() {
     let aProb = m.awayWinProb || 0;
     let bProb = m.bttsProb || 0;
     let oProb = m.over25Prob || 0;
+    let o15Prob = m.over15Prob || 0;
+    let o35Prob = m.over35Prob || 0;
+
+    // Check v2Predictions first if empty
+    if (hProb === 0) {
+      const v2Match = v2Predictions.find(p => p.event.id === match.id);
+      if (v2Match) {
+         hProb = v2Match.prediction.homeWinProb || 0;
+         dProb = v2Match.prediction.drawProb || 0;
+         aProb = v2Match.prediction.awayWinProb || 0;
+         bProb = v2Match.prediction.bttsProb || 0;
+         oProb = v2Match.prediction.over25Prob || 0;
+         o15Prob = v2Match.prediction.over15Prob || 0;
+         o35Prob = v2Match.prediction.over35Prob || 0;
+      }
+    }
 
     // Heuristic Poisson calculation if xG is available but probabilities are not
     if (hProb === 0) {
-      if (match.id === selectedMatchId && teamForms.home && teamForms.away) {
-        const pred = calculatePoissonModel(teamForms.home, teamForms.away);
+      const matchForms = match.id === selectedMatchId ? teamForms : { home: null, away: null };
+      if (matchForms.home && matchForms.away) {
+        const pred = calculatePoissonModel(matchForms.home, matchForms.away);
         hProb = pred.homeWinProb;
         dProb = pred.drawProb;
         aProb = pred.awayWinProb;
         bProb = pred.bttsProb;
         oProb = pred.over25Prob;
+        o15Prob = pred.over15Prob || (oProb * 1.3);
+        o35Prob = pred.over35Prob || (oProb * 0.6);
       } else if (match.xgHome || match.xgAway) {
         const xgH = match.xgHome || 0.8;
         const xgA = match.xgAway || 0.8;
@@ -412,7 +454,7 @@ export function useMatchStore() {
           return (exp * pow) / fact;
         };
 
-        hProb = 0; dProb = 0; aProb = 0; bProb = 0; oProb = 0;
+        hProb = 0; dProb = 0; aProb = 0; bProb = 0; oProb = 0; o15Prob = 0; o35Prob = 0;
         for (let i = 0; i < 7; i++) {
           for (let j = 0; j < 7; j++) {
             const p = poisson(xgH, i) * poisson(xgA, j);
@@ -420,12 +462,14 @@ export function useMatchStore() {
             else if (j > i) aProb += p;
             else dProb += p;
             if (i > 0 && j > 0) bProb += p;
+            if (i + j > 1.5) o15Prob += p;
             if (i + j > 2.5) oProb += p;
+            if (i + j > 3.5) o35Prob += p;
           }
         }
       } else {
-        // Fallback for no data: Neutral distribution favoring 1X2 market as default
-        hProb = 0.38; dProb = 0.28; aProb = 0.34; bProb = 0.48; oProb = 0.45;
+        // Fallback for no data: Neutral distribution
+        hProb = 0.38; dProb = 0.28; aProb = 0.34; bProb = 0.48; oProb = 0.45; o15Prob = 0.72; o35Prob = 0.22;
       }
     }
 
@@ -435,9 +479,42 @@ export function useMatchStore() {
     return [
       { market: 'BTTS', label: 'Ambos Marcan', prob: bProb },
       { market: 'OVER', label: 'Over 2.5', prob: oProb },
+      { market: 'OVER15', label: 'Over 1.5', prob: o15Prob },
+      { market: 'OVER35', label: 'Over 3.5', prob: o35Prob },
       { market: '1X2', label: label1X2, prob: win1X2 }
     ].sort((a, b) => b.prob - a.prob);
-  }, [selectedMatchId, teamForms]);
+  }, [selectedMatchId, teamForms, v2Predictions]);
+
+  /**
+   * Metadata/Badge helper moved to store for consistency
+   */
+  const getMatchBadge = useCallback((match: Event) => {
+    const probs = getMarketProbabilities(match);
+    const top = probs[0];
+    
+    let confidence: 'alta' | 'media' | 'baja' = 'baja';
+    let stars = '⭐';
+    let bgClass = 'bg-slate-400';
+
+    if (top.prob > 0.75) {
+      confidence = 'alta';
+      stars = '⭐⭐⭐';
+      bgClass = 'bg-brand-green';
+    } else if (top.prob > 0.6) {
+      confidence = 'media';
+      stars = '⭐⭐';
+      bgClass = 'bg-brand-yellow';
+    }
+
+    return {
+      label: top.label,
+      prob: top.prob,
+      confidence,
+      stars,
+      bgClass,
+      market: top.market
+    };
+  }, [getMarketProbabilities]);
 
   /**
    * Returns the top market if its probability exceeds 0.7.
@@ -497,7 +574,7 @@ export function useMatchStore() {
    * Group matches by date (Today, Tomorrow, Day After, etc.)
    */
   const groupedByDay = useMemo(() => {
-    const all = [...matchesWithLogos, ...upcomingMatchesWithLogos];
+    const all = [...matchesWithLogos, ...upcomingMatchesWithLogos, ...v2PredictionsWithLogos.map(p => p.event)];
     // Filter duplicates by id
     const unique = Array.from(new Map(all.map(m => [m.id, m])).values());
     
@@ -519,7 +596,7 @@ export function useMatchStore() {
     });
     
     return groups;
-  }, [matchesWithLogos, upcomingMatchesWithLogos]);
+  }, [matchesWithLogos, upcomingMatchesWithLogos, v2PredictionsWithLogos]);
 
   return {
     matches: matchesWithLogos,
@@ -534,7 +611,9 @@ export function useMatchStore() {
     topPicks,
     getMarketProbabilities,
     getTopMarket,
+    getMatchBadge,
     syncMatchDetail,
+    v2Predictions: v2PredictionsWithLogos,
     lastStats,
     loading,
     apiError

@@ -6,7 +6,7 @@ import { cn, Event } from './types';
 import { subscribeToApiCounter, subscribeToApiStatus } from './services/api';
 import { Footer } from './components/Footer';
 
-type AppView = 'live' | 'leagues' | 'market' | 'predictions' | 'betting';
+type AppView = 'live' | 'predictions' | 'value' | 'leagues' | 'tv';
 
 import { motion, AnimatePresence } from 'motion/react';
 import { TeamModalProvider, useTeamModal } from './contexts/TeamModalContext';
@@ -26,6 +26,8 @@ const PlayerModal = lazy(() => import('./components/PlayerModal').then(m => ({ d
 const MatchAnalysisModal = lazy(() => import('./components/MatchAnalysisModal').then(m => ({ default: m.MatchAnalysisModal })));
 const TeamModal = lazy(() => import('./components/TeamModal').then(m => ({ default: m.TeamModal })));
 const BettingHub = lazy(() => import('./components/BettingHub').then(m => ({ default: m.BettingHub })));
+const SureBetsView = lazy(() => import('./components/SureBetsView').then(m => ({ default: m.SureBetsView })));
+const TVGuideView = lazy(() => import('./components/TVGuideView').then(m => ({ default: m.TVGuideView })));
 
 const SuspenseLoader = () => (
   <div className="flex-1 flex items-center justify-center bg-brand-bg-primary h-full">
@@ -82,72 +84,13 @@ function ApiCounter() {
 }
 
 function App() {
-  const badgeCache = React.useRef(new Map<string, any>());
-
-  const getBadgeData = React.useMemo(() => {
-    return (match: Event, forms?: { home: TeamForm | null; away: TeamForm | null }) => {
-      const cacheKey = match.id + match.status + (match.xgHome || 0) + (match.xgAway || 0) + (forms?.home ? 'f' : 'n');
-      if (badgeCache.current.has(cacheKey)) {
-        return badgeCache.current.get(cacheKey);
-      }
-
-      // Evict oldest entries if cache grows too large to prevent memory leaks
-      if (badgeCache.current.size > 300) {
-        const firstKey = badgeCache.current.keys().next().value;
-        if (firstKey) badgeCache.current.delete(firstKey);
-      }
-
-      let pred;
-      if (match.xgHome !== undefined && match.xgAway !== undefined) {
-        const stats: any = { xgHome: match.xgHome, xgAway: match.xgAway };
-        pred = calculateHybridPrediction(match.id, stats, null, null, forms, match.status === 'LIVE' ? (match.currentMinute || 0) : 90, { home: match.homeScore || 0, away: match.awayScore || 0 });
-      } else if (forms && forms.home && forms.away) {
-        pred = calculatePoissonModel(forms.home, forms.away);
-      } else {
-        // Fallback: More neutral distribution favoring 1X2 over BTTS if no data
-        pred = {
-          homeWinProb: 0.38,
-          drawProb: 0.28,
-          awayWinProb: 0.34,
-          over25Prob: 0.45,
-          bttsProb: 0.48
-        };
-      }
-
-      const stricktBttsProb = pred.bttsProb > 0.60 ? pred.bttsProb : (pred.bttsProb * 0.7); // Penalize average BTTS
-      const strictOver25 = pred.over25Prob > 0.60 ? pred.over25Prob : (pred.over25Prob * 0.7);
-
-      const markets = [
-        { label: '1', prob: pred.homeWinProb },
-        { label: 'X', prob: pred.drawProb },
-        { label: '2', prob: pred.awayWinProb },
-        { label: 'Over 2.5', prob: strictOver25 },
-        { label: 'BTTS', prob: stricktBttsProb }
-      ];
-      const top = markets.reduce((p, c) => c.prob > p.prob ? c : p);
-      const bgClass = top.prob > 0.7 ? 'bg-[#16A34A]' : top.prob >= 0.5 ? 'bg-[#EAB308]' : 'bg-[#6B7280]';
-      const confianza = top.prob > 0.7 ? 'alta' : top.prob >= 0.5 ? 'media' : 'baja';
-      const stars = top.prob > 0.7 ? '⭐⭐⭐' : top.prob >= 0.5 ? '⭐⭐' : '⭐';
-      const result = { 
-        label: top.label, 
-        conf: confianza, 
-        bgClass, 
-        stars,
-        reasoning: top.label === 'BTTS' ? pred.bttsReasoning : pred.reasoning 
-      };
-      
-      badgeCache.current.set(cacheKey, result);
-      return result;
-    };
-  }, []);
-
   const [activeView, setActiveView] = useState<AppView>('live');
   const [collapsedLeagues, setCollapsedLeagues] = useState<Record<string, boolean>>({});
   const [globalPlayerId, setGlobalPlayerId] = useState<string | null>(null);
   const [analysisMatch, setAnalysisMatch] = useState<Event | null>(null);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
 
-  const { matches, upcomingMatches, selectedMatchId, setSelectedMatchId, liveData, lastStats, loading, apiError, groupedByMarket, getMarketProbabilities, topPicks, groupedByDay, dayLabels, teamForms, syncMatchDetail } = useMatchStore();
+  const { matches, upcomingMatches, selectedMatchId, setSelectedMatchId, liveData, lastStats, loading, apiError, groupedByMarket, getMarketProbabilities, getMatchBadge, topPicks, groupedByDay, dayLabels, teamForms, syncMatchDetail, v2Predictions } = useMatchStore();
 
   const toggleLeague = (league: string) => {
     setCollapsedLeagues(prev => ({ ...prev, [league]: !prev[league] }));
@@ -249,7 +192,7 @@ function App() {
             {!collapsedLeagues[league] && (
               <div className="space-y-1">
                 {leagueMatches.map(match => {
-                  const badge = getBadgeData(match, match.id === selectedMatchId ? teamForms : undefined);
+                  const badge = getMatchBadge(match);
                   return (
                     <EnrichedMatchCard 
                       key={match.id}
@@ -257,7 +200,7 @@ function App() {
                       isUpcoming={isUpcoming}
                       selectedMatchId={selectedMatchId}
                       setSelectedMatchId={setSelectedMatchId}
-                      badgeData={badge}
+                      badgeData={badge as any}
                     />
                   );
                 })}
@@ -324,17 +267,17 @@ function App() {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative w-full min-h-0">
 
       {/* Navigation (Sidebar Desktop / Bottom Mobile) */}
-      <nav className="w-full md:w-20 h-16 md:h-full border-t md:border-r md:border-t-0 border-brand-border bg-brand-bg-secondary flex flex-row md:flex-col items-center justify-around md:justify-start md:py-10 md:space-y-6 z-[100] order-last md:order-first shrink-0 relative mt-0">
+      <nav className="w-full md:w-24 h-16 md:h-full border-t md:border-r md:border-t-0 border-brand-border bg-brand-bg-secondary flex flex-row md:flex-col items-center justify-around md:justify-start md:py-10 md:space-y-8 z-[100] order-last md:order-first shrink-0 relative mt-0">
         <div className="hidden md:flex flex-col items-center mb-10 shrink-0">
-           <h1 className="text-xl font-black italic tracking-tighter text-brand-green rotate-[-5deg]">PB</h1>
-           <div className="w-8 h-1 bg-brand-green mt-1 rounded-full glow-primary" />
+           <h1 className="text-2xl font-display font-black italic tracking-tighter text-brand-green rotate-[-5deg]">PB</h1>
+           <div className="w-10 h-0.5 bg-brand-green mt-1 rounded-full" />
         </div>
         
         <NavItem id="live" icon={Activity} label="Vivo" />
-        <NavItem id="predictions" icon={Sparkles} label="Partidos IA" />
-        <NavItem id="betting" icon={Target} label="Apuestas" />
-        <NavItem id="market" icon={ShoppingBag} label="Mercado" />
+        <NavItem id="predictions" icon={Sparkles} label="Predicciones" />
+        <NavItem id="value" icon={Target} label="Valor" />
         <NavItem id="leagues" icon={Globe} label="Ligas" />
+        <NavItem id="tv" icon={Monitor} label="TV" />
 
         <div className="hidden md:flex mt-auto pt-6 border-t border-brand-border w-full flex-col items-center">
           <button 
@@ -362,16 +305,16 @@ function App() {
           selectedMatchId ? "hidden md:flex" : "flex flex-1 min-h-0 md:h-full"
         )}>
           <div className="p-4 md:p-6 border-b border-brand-border shrink-0">
-            <h1 className="text-xl md:text-2xl font-black tracking-tighter text-brand-text-white uppercase italic mb-6">
-              CENTRO <span className="text-brand-green">EN VIVO</span>
+            <h1 className="text-2xl font-display font-black tracking-tighter text-brand-text-white uppercase italic mb-6">
+              CENTRO <span className="text-brand-green font-sans">EN VIVO</span>
             </h1>
             
             <div className="relative group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted group-focus-within:text-brand-green transition-colors" />
               <input 
                 type="text" 
-                placeholder="Buscar partidos..." 
-                className="w-full bg-brand-bg-card border border-brand-border rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-brand-green/50 transition-all text-brand-text-white"
+                placeholder="Filtrar eventos..." 
+                className="w-full bg-brand-bg-card border border-brand-border rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-brand-green/30 transition-all text-brand-text-white"
               />
             </div>
           </div>
@@ -475,13 +418,13 @@ function App() {
                           <h2 className="text-3xl font-black italic tracking-tighter text-brand-text-white uppercase">
                             PANEL DE <span className="text-brand-green">CONTROL</span>
                           </h2>
-                          <p className="text-brand-text-muted text-[10px] uppercase font-bold tracking-[0.3em] mt-1">Sincronización en tiempo real habilitada</p>
+                          <p className="text-brand-text-muted text-[10px] uppercase font-bold tracking-[0.3em] mt-1">Sincronización en tiempo real BSD</p>
                         </div>
-                        <div className="flex items-center gap-3 bg-brand-bg-card p-3 rounded-2xl border border-brand-border/30">
+                        <div className="flex items-center gap-3 bg-brand-bg-card p-3 rounded-2xl border border-brand-border/30 shadow-[0_0_15px_rgba(78,222,163,0.1)]">
                           <Activity className="w-5 h-5 text-brand-green" />
                           <div>
                             <div className="text-[10px] font-black text-brand-text-white uppercase leading-none">{matches.length} ACTIVOS</div>
-                            <div className="text-[8px] font-bold text-brand-green uppercase tracking-tighter mt-1">Live Feed</div>
+                            <div className="text-[8px] font-bold text-brand-green uppercase tracking-tighter mt-1">Feed en Tiempo Real</div>
                           </div>
                         </div>
                       </div>
@@ -535,6 +478,7 @@ function App() {
                           <Suspense fallback={<SuspenseLoader />}>
                             <PredictionsView 
                               groupedByDay={groupedByDay} 
+                              v2Predictions={v2Predictions}
                               dayLabels={dayLabels}
                               onSelectMatch={(id) => {
                                 const m = (groupedByDay.today.concat(groupedByDay.tomorrow, groupedByDay.dayAfter, groupedByDay.later)).find(match => match.id === id);
@@ -547,19 +491,23 @@ function App() {
                       </div>
                     </div>
                   )}
-                  {activeView === 'betting' && (
-                    <div className="flex-1 h-full relative overflow-hidden flex flex-col">
-                      <ErrorBoundary><Suspense fallback={<SuspenseLoader />}><BettingHub /></Suspense></ErrorBoundary>
-                    </div>
-                  )}
-                  {activeView === 'market' && (
+                  {activeView === 'value' && (
                     <div className="flex-1 h-full relative overflow-hidden">
-                      <ErrorBoundary><Suspense fallback={<SuspenseLoader />}><MarketHub /></Suspense></ErrorBoundary>
+                      <ErrorBoundary>
+                        <Suspense fallback={<SuspenseLoader />}>
+                          <SureBetsView />
+                        </Suspense>
+                      </ErrorBoundary>
                     </div>
                   )}
                   {activeView === 'leagues' && (
                     <div className="flex-1 h-full relative overflow-hidden">
                       <ErrorBoundary><Suspense fallback={<SuspenseLoader />}><CompetitionView /></Suspense></ErrorBoundary>
+                    </div>
+                  )}
+                  {activeView === 'tv' && (
+                    <div className="flex-1 h-full relative overflow-hidden">
+                      <ErrorBoundary><Suspense fallback={<SuspenseLoader />}><TVGuideView /></Suspense></ErrorBoundary>
                     </div>
                   )}
                 </div>

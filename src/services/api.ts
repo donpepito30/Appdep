@@ -1,4 +1,4 @@
-import { Event, Stats, Prediction, Odds, Incident, Player, Manager, H2HHistory, Competition, MatchDetail, OddMarket, EventMetadata, LineupData, PlayerMatchStats } from '../types';
+import { Event, Stats, Prediction, Odds, Incident, Player, Manager, H2HHistory, Competition, MatchDetail, OddMarket, EventMetadata, LineupData, PlayerMatchStats, TVChannel, Broadcast } from '../types';
 
 const API_BASE = '/api/v2';
 
@@ -447,6 +447,9 @@ export const api = {
                 } else if (type.includes('shots on goal') || type.includes('shots on target')) {
                   stats.shotsOnTargetHome = parseVal(h);
                   stats.shotsOnTargetAway = parseVal(a);
+                } else if (type.includes('shots off target')) {
+                  stats.shotsOffTargetHome = parseVal(h);
+                  stats.shotsOffTargetAway = parseVal(a);
                 } else if (type.includes('shots') && !type.includes('target')) {
                   stats.shotsHome = parseVal(h);
                   stats.shotsAway = parseVal(a);
@@ -459,9 +462,30 @@ export const api = {
                 } else if (type.includes('yellow card')) {
                   stats.yellowCardsHome = parseVal(h);
                   stats.yellowCardsAway = parseVal(a);
+                } else if (type.includes('red card')) {
+                  stats.redCardsHome = parseVal(h);
+                  stats.redCardsAway = parseVal(a);
                 } else if (type === 'xg' || type.includes('expected goals')) {
                   stats.xgHome = parseVal(h);
                   stats.xgAway = parseVal(a);
+                } else if (type.includes('dangerous attacks') || type.includes('ataques peligrosos')) {
+                  stats.dangerousAttacksHome = parseVal(h);
+                  stats.dangerousAttacksAway = parseVal(a);
+                } else if (type.includes('attacks') || type.includes('ataques')) {
+                  stats.attacksHome = parseVal(h);
+                  stats.attacksAway = parseVal(a);
+                } else if (type.includes('save') || type.includes('paradas')) {
+                  stats.savesHome = parseVal(h);
+                  stats.savesAway = parseVal(a);
+                } else if (type.includes('big chances') || type.includes('ocasiones claras')) {
+                  stats.bigChancesHome = parseVal(h);
+                  stats.bigChancesAway = parseVal(a);
+                } else if (type.includes('passes') && !type.includes('accurate')) {
+                  stats.passesHome = parseVal(h);
+                  stats.passesAway = parseVal(a);
+                } else if (type.includes('accurate passes')) {
+                  stats.accuratePassesHome = parseVal(h);
+                  stats.accuratePassesAway = parseVal(a);
                 }
               });
               
@@ -473,6 +497,7 @@ export const api = {
                   shotsAway: stats.shotsAway ?? 0,
                   shotsOnTargetHome: stats.shotsOnTargetHome ?? 0,
                   shotsOnTargetAway: stats.shotsOnTargetAway ?? 0,
+                  shotsOffTargetHome: stats.shotsOffTargetHome,
                   xgHome: stats.xgHome ?? 0,
                   xgAway: stats.xgAway ?? 0,
                   cornersHome: stats.cornersHome ?? 0,
@@ -481,6 +506,20 @@ export const api = {
                   foulsAway: stats.foulsAway ?? 0,
                   yellowCardsHome: stats.yellowCardsHome ?? 0,
                   yellowCardsAway: stats.yellowCardsAway ?? 0,
+                  redCardsHome: stats.redCardsHome ?? 0,
+                  redCardsAway: stats.redCardsAway ?? 0,
+                  attacksHome: stats.attacksHome,
+                  attacksAway: stats.attacksAway,
+                  dangerousAttacksHome: stats.dangerousAttacksHome,
+                  dangerousAttacksAway: stats.dangerousAttacksAway,
+                  savesHome: stats.savesHome,
+                  savesAway: stats.savesAway,
+                  bigChancesHome: stats.bigChancesHome,
+                  bigChancesAway: stats.bigChancesAway,
+                  passesHome: stats.passesHome,
+                  passesAway: stats.passesAway,
+                  accuratePassesHome: stats.accuratePassesHome,
+                  accuratePassesAway: stats.accuratePassesAway,
                 } as Stats;
               }
             }
@@ -584,6 +623,139 @@ export const api = {
       }
     }
     return results;
+  },
+
+  getV2Predictions: async (page = 1, onUpdate?: (data: { event: Event, prediction: Prediction }[]) => void): Promise<{ event: Event, prediction: Prediction }[]> => {
+    try {
+      return await fetchSeguro(`predicciones/?page=${page}`, onUpdate, (data) => {
+        if (!data || !data.results) return [];
+        return data.results.map((item: any) => {
+          const e = item.event || {};
+          const m = item.mercados || item.markets || {};
+          
+          // Spec markets: resultado_partido, goles_esperados, más_menos, ambos marcan, puntuación
+          const resFull = m['resultado_partido'] || {};
+          const bttsMarket = m['ambos marcan'] || m['ambos_equipos_marcan'] || {};
+          const mmMarket = m['más_menos'] || m['over_under'] || {};
+          const scoreMarket = m['puntuación'] || m['puntuacion'] || {};
+          const xgMarket = m['goles_esperados'] || {};
+          const model = item.modelo || {};
+          const recs = item.recomendaciones || {};
+
+          const hId = String(e.home_team_id || e.home_team?.id || '');
+          const aId = String(e.away_team_id || e.away_team?.id || '');
+          const hName = e.home_team || e.home_team?.name || 'Home';
+          const aName = e.away_team || e.away_team?.name || 'Away';
+          
+          updateTeamCache(hId, hName);
+          updateTeamCache(aId, aName);
+
+          const event: Event = {
+            id: String(e.id),
+            homeTeam: nameCache[hId] || hName,
+            awayTeam: nameCache[aId] || aName,
+            homeScore: e.home_score ?? 0,
+            awayScore: e.away_score ?? 0,
+            startTime: e.event_date || e.start_time || '',
+            status: e.status === 'finished' ? 'FINISHED' : (e.status === 'live' ? 'LIVE' : 'SCHEDULED'),
+            leagueName: e.league_name || e.league?.name || 'League',
+            leagueId: String(e.league_id || e.league?.id || ''),
+            homeLogo: getImgUrl('team', hId) || undefined,
+            awayLogo: getImgUrl('team', aId) || undefined,
+            xgHome: xgMarket.local || e.xg_home,
+            xgAway: xgMarket.visitante || e.xg_away,
+          };
+
+          const parseProb = (v: any) => {
+            if (v === undefined || v === null) return 0;
+            const n = Number(v);
+            if (isNaN(n)) return 0;
+            return n > 1 ? n / 100 : n;
+          };
+
+          const prediction: Prediction = {
+            homeWinProb: parseProb(resFull.prob_local || resFull.prob_1),
+            drawProb: parseProb(resFull.prob_empate || resFull.prob_x),
+            awayWinProb: parseProb(resFull.prob_visitante || resFull.prob_2),
+            scoreline: scoreMarket.más_probable || scoreMarket.scoreline,
+            source: `BZZOIRO_AI_${model.versión || 'v2'}`,
+            confidence: model.confianza || 0.85,
+            btts: !!(recs.btts),
+            bttsProb: parseProb(bttsMarket.prob_sí || bttsMarket.yes || 0.5),
+            over15Prob: parseProb(mmMarket.prob_más_15 || 0.75),
+            over25Prob: parseProb(mmMarket.prob_más_25 || mmMarket.over_25 || 0.5),
+            over35Prob: parseProb(mmMarket.prob_más_35 || 0.25),
+            recommendations: {
+              favorito: recs.favorito,
+              favorite_prob: recs.favorite_prob,
+              bet_favorite: !!recs.bet_favorite,
+              over_15: !!recs.over_15,
+              over_25: !!recs.over_25,
+              over_35: !!recs.over_35,
+              btts: !!recs.btts,
+              ganador: !!recs.ganador,
+              value_detected: !!(recs.bet_favorite || recs.ganador || recs.over_25),
+              opportunity_market: recs.bet_favorite ? 'Favorito con Valor' : recs.over_25 ? 'Over 2.5 Probable' : recs.btts ? 'BTTS Sí' : undefined
+            }
+          };
+
+          return { event, prediction };
+        });
+      }, { cacheTTL: 120000 }); 
+    } catch {
+      return [];
+    }
+  },
+
+  getEventPrediction: async (eventId: string, onUpdate?: (data: Prediction | null) => void): Promise<Prediction | null> => {
+    try {
+      return await fetchSeguro(`eventos/${eventId}/predicción/`, onUpdate, (data) => {
+        if (!data) return null;
+        
+        const m = data.mercados || {};
+        const scoreM = m['puntuación'] || m['puntuacion'] || {};
+        const resM = m['resultado_partido'] || {};
+        const mmM = m['más_menos'] || {};
+        const amM = m['ambos marcan'] || {};
+        const model = data.modelo || {};
+        const recs = data.recomendaciones || {};
+
+        const parseProb = (v: any) => {
+          if (v === undefined || v === null) return 0;
+          const n = Number(v);
+          if (isNaN(n)) return 0;
+          return n > 1 ? n / 100 : n;
+        };
+
+        return {
+          homeWinProb: parseProb(resM.prob_local),
+          drawProb: parseProb(resM.prob_empate),
+          awayWinProb: parseProb(resM.prob_visitante),
+          scoreline: scoreM.más_probable,
+          source: `BZZOIRO_AI_${model.versión || 'v2'}`,
+          confidence: model.confianza || 0.85,
+          btts: !!(recs.btts),
+          bttsProb: parseProb(amM.prob_sí),
+          over15Prob: parseProb(mmM.prob_más_15),
+          over25Prob: parseProb(mmM.prob_más_25),
+          over35Prob: parseProb(mmM.prob_más_35),
+          recommendations: {
+            favorito: recs.favorito,
+            favorite_prob: recs.favorite_prob,
+            bet_favorite: !!recs.bet_favorite,
+            over_15: !!recs.over_15,
+            over_25: !!recs.over_25,
+            over_35: !!recs.over_35,
+            btts: !!recs.btts,
+            ganador: !!recs.ganador,
+            value_detected: !!(recs.bet_favorite || recs.ganador || recs.over_25),
+            opportunity_market: recs.bet_favorite ? 'Favorito con Valor' : recs.over_25 ? 'Over 2.5 Probable' : recs.btts ? 'BTTS Sí' : undefined
+          }
+        };
+      }, { silent404: true, cacheTTL: 60000 });
+    } catch {
+      return null;
+    }
   },
 
   getOdds: async (eventId: string, onUpdate?: (data: any) => void, options?: { signal?: AbortSignal }): Promise<OddMarket | null> => {
@@ -752,15 +924,43 @@ export const api = {
     }
   },
 
-  getBroadcasts: async (eventId: string, onUpdate?: (data: any[]) => void): Promise<any[]> => {
+  getTVChannels: async (countryCode?: string, name?: string, limit = 50): Promise<TVChannel[]> => {
     try {
-      return await fetchSeguro(`events/${eventId}/broadcasts/`, onUpdate, (data) => {
-        if (!data) return [];
-        return data.results || (Array.isArray(data) ? data : []);
-      }, { silent404: true, cacheTTL: 300000 });
-    } catch {
-      return [];
-    }
+      const q = new URLSearchParams();
+      if (countryCode) q.append('código_de_país', countryCode);
+      if (name) q.append('nombre', name);
+      q.append('límite', limit.toString());
+      return await fetchSeguro(`canales-de-tv/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+    } catch { return []; }
+  },
+
+  getTVChannelEmissions: async (channelId: number, options?: { leagueId?: number, seasonId?: number }): Promise<Broadcast[]> => {
+    try {
+      const q = new URLSearchParams();
+      if (options?.leagueId) q.append('ID de liga', options.leagueId.toString());
+      if (options?.seasonId) q.append('ID de temporada', options.seasonId.toString());
+      return await fetchSeguro(`canales-de-tv/${channelId}/emisiones/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+    } catch { return []; }
+  },
+
+  getEventBroadcasts: async (eventId: string, countryCode?: string): Promise<Broadcast[]> => {
+    try {
+      const q = new URLSearchParams();
+      if (countryCode) q.append('código_de_país', countryCode);
+      return await fetchSeguro(`eventos/${eventId}/difusiones/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+    } catch { return []; }
+  },
+
+  getGlobalBroadcasts: async (params: { leagueId?: number, teamId?: number, countryCode?: string, dateFrom?: string, dateTo?: string }): Promise<Broadcast[]> => {
+    try {
+      const q = new URLSearchParams();
+      if (params.leagueId) q.append('ID_liga', params.leagueId.toString());
+      if (params.teamId) q.append('ID_equipo', params.teamId.toString());
+      if (params.countryCode) q.append('código_de_país', params.countryCode);
+      if (params.dateFrom) q.append('fecha_desde', params.dateFrom);
+      if (params.dateTo) q.append('fecha_hasta', params.dateTo);
+      return await fetchSeguro(`difusiones/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+    } catch { return []; }
   },
 
   getShotmap: async (eventId: string, onUpdate?: (data: any[]) => void): Promise<any[]> => {

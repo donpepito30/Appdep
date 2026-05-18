@@ -121,7 +121,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
     }
 
     // Load Advanced Stats if we are on Analysis or Strategy tab
-    if ((activeTab === 'stats' || activeTab === 'strategy') && !homeAdvancedStats && match.homeTeamId && match.awayTeamId && !loadingAdvanced) {
+    if ((activeTab === 'stats' || activeTab === 'strategy' || activeTab === 'ai') && !homeAdvancedStats && match.homeTeamId && match.awayTeamId && !loadingAdvanced) {
       setLoadingAdvanced(true);
       
       const calculateStats = (fixtures: any[], teamId: string): AdvancedStats => {
@@ -189,12 +189,18 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
         setHomeAdvancedStats(hStats);
         setAwayAdvancedStats(aStats);
         setLoadingAdvanced(false);
+      });
+    }
 
-        // Generate Gemini AI Preview if not already generated
-        if (!aiPreview && !isGeneratingAI) {
-          setIsGeneratingAI(true);
-          
-          const homeForm = homeFix.slice(0, 5).map(f => {
+    // Independent AI Preview generation ONLY when AI tab is selected
+    if (activeTab === 'ai' && !aiPreview && !isGeneratingAI && match.homeTeamId && match.awayTeamId) {
+       setIsGeneratingAI(true);
+       
+       Promise.all([
+         api.getFixtures(match.homeTeamId, 5),
+         api.getFixtures(match.awayTeamId, 5)
+       ]).then(([homeFix, awayFix]) => {
+          const homeForm = homeFix.map(f => {
             const isHome = String(f.homeTeamId) === match.homeTeamId;
             const gf = isHome ? f.homeScore : f.awayScore;
             const ga = isHome ? f.awayScore : f.homeScore;
@@ -203,7 +209,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
             return 'D';
           });
 
-          const awayForm = awayFix.slice(0, 5).map(f => {
+          const awayForm = awayFix.map(f => {
             const isHome = String(f.homeTeamId) === match.awayTeamId;
             const gf = isHome ? f.homeScore : f.awayScore;
             const ga = isHome ? f.awayScore : f.homeScore;
@@ -212,23 +218,18 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
             return 'D';
           });
 
-          // H2H Summary for prompt
-          const h2hText = h2hHistory.length > 0 
-            ? h2hHistory.slice(0, 3).map(h => `${h.homeTeam} ${h.homeScore}-${h.awayScore} ${h.awayTeam}`).join(', ')
-            : 'Sin enfrentamientos recientes registrados.';
-
           generateMatchPreview(
             match.homeTeam,
             match.awayTeam,
             homeForm,
             awayForm,
-            h2hText
+            'Historial reciente sincronizado.',
+            match.id
           ).then(text => {
             setAIPreview(text);
             setIsGeneratingAI(false);
           }).catch(() => setIsGeneratingAI(false));
-        }
-      });
+       }).catch(() => setIsGeneratingAI(false));
     }
   }, [activeTab, match.homeTeam, match.awayTeam, match.homeTeamId, match.awayTeamId]);
 
@@ -930,13 +931,24 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                 ) : (
                   <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl">
                     <h4 className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest mb-8">Desglose de Estadísticas en Vivo</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
                        <StatLine label="Posesión" home={stats.possessionHome || 0} away={stats.possessionAway || 0} unit="%" />
+                       <StatLine label="xG (Goles Esperados)" home={stats.xgHome || 0} away={stats.xgAway || 0} />
                        <StatLine label="Remates a Puerta" home={stats.shotsOnTargetHome || 0} away={stats.shotsOnTargetAway || 0} />
+                       <StatLine label="Remates fuera" home={stats.shotsOffTargetHome || 0} away={stats.shotsOffTargetAway || 0} />
                        <StatLine label="Remates Totales" home={stats.shotsHome || 0} away={stats.shotsAway || 0} />
                        <StatLine label="Córners" home={stats.cornersHome || 0} away={stats.cornersAway || 0} />
-                       <StatLine label="Faltas" home={stats.foulsHome || 0} away={stats.foulsAway || 0} />
-                       <StatLine label="Tarjetas Amarillas" home={stats.yellowCardsHome || 0} away={stats.yellowCardsAway || 0} />
+                       
+                       <div className="md:col-span-2 border-t border-brand-border/20 my-2 pt-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                         <StatLine label="Ataques Peligrosos" home={stats.dangerousAttacksHome || 0} away={stats.dangerousAttacksAway || 0} />
+                         <StatLine label="Ataques Totales" home={stats.attacksHome || 0} away={stats.attacksAway || 0} />
+                         <StatLine label="Ocasiones Claras" home={stats.bigChancesHome || 0} away={stats.bigChancesAway || 0} />
+                         <StatLine label="Paradas Portero" home={stats.savesHome || 0} away={stats.savesAway || 0} />
+                         <StatLine label="Pases Precisos" home={stats.accuratePassesHome || 0} away={stats.accuratePassesAway || 0} />
+                         <StatLine label="Faltas" home={stats.foulsHome || 0} away={stats.foulsAway || 0} />
+                         <StatLine label="Tarjetas Rojas" home={stats.redCardsHome || 0} away={stats.redCardsAway || 0} />
+                         <StatLine label="Tarjetas Amarillas" home={stats.yellowCardsHome || 0} away={stats.yellowCardsAway || 0} />
+                       </div>
                     </div>
 
                     {playerStats && playerStats.length > 0 && (

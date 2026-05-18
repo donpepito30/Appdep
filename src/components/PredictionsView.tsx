@@ -1,22 +1,37 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Calendar, ChevronDown, Sparkles, TrendingUp, Info } from 'lucide-react';
-import { Event, cn } from '../types';
+import { Event, Prediction, cn } from '../types';
 import { PredictionCard } from './PredictionCard';
 import { dayLabels } from '../hooks/useMatchStore';
 import { Footer } from './Footer';
 
 interface PredictionsViewProps {
   groupedByDay: Record<'today' | 'tomorrow' | 'dayAfter' | 'later', Event[]>;
+  v2Predictions: { event: Event, prediction: Prediction }[];
   dayLabels: Record<string, string>;
   onSelectMatch: (id: string) => void;
   getMarketProbabilities: (match: Event) => { market: string; label: string; prob: number }[];
 }
 
-export function PredictionsView({ groupedByDay, dayLabels: propDayLabels, onSelectMatch, getMarketProbabilities }: PredictionsViewProps) {
+export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDayLabels, onSelectMatch, getMarketProbabilities }: PredictionsViewProps) {
   // Use prop if provided, fallback to import
   const finalDayLabels = propDayLabels || dayLabels;
   const days: Array<'today' | 'tomorrow' | 'dayAfter'> = ['today', 'tomorrow', 'dayAfter'];
+
+  // Logic to "Choose" Top Picks (highest probability or confidence)
+  const allUpcoming = [...groupedByDay.today, ...groupedByDay.tomorrow, ...groupedByDay.dayAfter];
+  const sortedPicks = allUpcoming
+    .map(match => {
+      const probs = getMarketProbabilities(match);
+      const top = probs.reduce((prev, current) => (prev.prob > current.prob) ? prev : current);
+      return { match, top };
+    })
+    .sort((a, b) => b.top.prob - a.top.prob);
+
+  const topPick = sortedPicks[0];
+  const otherTopPicks = sortedPicks.slice(1, 3);
+  const topPicks = sortedPicks.filter(p => p.top.prob > 0.75).slice(0, 3);
 
   const getFormattedDate = (category: string) => {
     const now = new Date();
@@ -41,19 +56,119 @@ export function PredictionsView({ groupedByDay, dayLabels: propDayLabels, onSele
   return (
     <div className="space-y-12 pb-20">
       {/* Header Info */}
-      <div className="glass-card p-6 rounded-[2rem] border border-brand-border/40 bg-brand-bg-primary/20">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-brand-green/10 rounded-2xl">
-            <Sparkles className="w-6 h-6 text-brand-green" />
-          </div>
-          <div>
-            <h3 className="text-lg font-black text-brand-text-white uppercase tracking-tight">Predicciones Diarias IA</h3>
-            <p className="text-xs text-brand-text-muted mt-1">
-              Análisis multivariante basado en <span className="text-brand-green font-bold">Machine Learning</span> y Redes Bayesianas para los próximos 3 días.
-            </p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass-card p-6 rounded-[2rem] border border-brand-border/40 bg-brand-bg-primary/20 lg:col-span-2">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-brand-green/10 rounded-2xl">
+              <Sparkles className="w-6 h-6 text-brand-green" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-brand-text-white uppercase tracking-tight">Ecosistema Predictivo BSD AI</h3>
+              <p className="text-xs text-brand-text-muted mt-2 leading-relaxed">
+                Análisis multivariante basado en <span className="text-brand-green font-bold">Deep Learning</span> para los próximos 3 días. Nuestro sistema procesa más de 50 variables por encuentro.
+              </p>
+              <div className="flex gap-4 mt-6">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Model Index</span>
+                  <span className="text-sm font-mono font-black text-brand-green">SINC v2.4</span>
+                </div>
+                <div className="flex flex-col border-l border-brand-border pl-4">
+                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Partidos Analizados</span>
+                  <span className="text-sm font-mono font-black text-white">{allUpcoming.length}</span>
+                </div>
+                {allUpcoming.some(m => v2Predictions[m.id]?.recommendations?.value_detected) && (
+                  <div className="flex flex-col border-l border-brand-red pl-4 animate-pulse">
+                    <span className="text-[10px] font-black text-brand-red uppercase tracking-widest">Valor Detectado</span>
+                    <span className="text-sm font-mono font-black text-brand-red">ALERTA</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
+
+        <div className="glass-card p-6 rounded-[2rem] border border-brand-yellow/20 bg-brand-yellow/5 flex flex-col justify-center">
+            <div className="flex items-center gap-2 mb-3">
+              <TrendingUp className="w-4 h-4 text-brand-yellow" />
+              <span className="text-[10px] font-black text-brand-yellow uppercase tracking-widest">AI Market Outlook</span>
+            </div>
+            <p className="text-[11px] text-brand-text-muted uppercase font-bold tracking-tight leading-normal">
+              Tendencia alcista en mercados de <span className="text-white">Goles HT</span> y <span className="text-white">Hándicaps Asiáticos</span> para la jornada de hoy.
+            </p>
+        </div>
       </div>
+
+      {/* FEATURED TOP PICK - THE BANKER */}
+      {topPick && (
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-2">
+            <div className="p-2 bg-brand-yellow/10 rounded-xl">
+              <Sparkles className="w-4 h-4 text-brand-yellow" />
+            </div>
+            <h2 className="text-xl font-black text-brand-text-white tracking-wide uppercase">
+              Selección <span className="text-brand-yellow italic">EL BANQUERO</span> BSD
+            </h2>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-6">
+            {(() => {
+              const match = topPick.match;
+              const top = topPick.top;
+              const v2Match = v2Predictions.find(p => p.event.id === match.id);
+              const probs = getMarketProbabilities(match);
+              const bttsData = probs.find(p => p.market === 'BTTS');
+              const overData = probs.find(p => p.market === 'OVER');
+              return (
+                <PredictionCard
+                  key={`featured-${match.id}`}
+                  match={match}
+                  featured={true}
+                  prediction={v2Match?.prediction}
+                  topMarket={top.label}
+                  topProb={top.prob}
+                  bttsProb={bttsData?.prob || 0.5}
+                  over25Prob={overData?.prob || 0.5}
+                  onSelect={onSelectMatch}
+                />
+              );
+            })()}
+          </div>
+        </section>
+      )}
+
+      {/* TOP PICKS SECTION - "Escoger los próximos partidos" */}
+      {otherTopPicks.length > 0 && (
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-2">
+            <div className="p-2 bg-brand-green/10 rounded-xl">
+              <TrendingUp className="w-4 h-4 text-brand-green" />
+            </div>
+            <h2 className="text-xl font-black text-brand-text-white tracking-wide uppercase">
+              Predicciones <span className="text-brand-green">BSD PRO</span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+            {otherTopPicks.map(({ match, top }) => {
+              const v2Match = v2Predictions.find(p => p.event.id === match.id);
+              const probs = getMarketProbabilities(match);
+              const bttsData = probs.find(p => p.market === 'BTTS');
+              const overData = probs.find(p => p.market === 'OVER');
+              return (
+                <PredictionCard
+                  key={`top-${match.id}`}
+                  match={match}
+                  prediction={v2Match?.prediction}
+                  topMarket={top.label}
+                  topProb={top.prob}
+                  bttsProb={bttsData?.prob || 0.5}
+                  over25Prob={overData?.prob || 0.5}
+                  onSelect={onSelectMatch}
+                />
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {days.map((dayKey) => {
         const matches = groupedByDay[dayKey];
@@ -80,6 +195,7 @@ export function PredictionsView({ groupedByDay, dayLabels: propDayLabels, onSele
             {matches.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {matches.map((match) => {
+                  const v2Match = v2Predictions.find(p => p.event.id === match.id);
                   const probs = getMarketProbabilities(match);
                   // Find the market that is NOT 1X2 if possible or just use the highest one
                   const marketData = probs.find(p => p.prob > 0.7) || probs[0];
@@ -90,6 +206,7 @@ export function PredictionsView({ groupedByDay, dayLabels: propDayLabels, onSele
                     <PredictionCard
                       key={match.id}
                       match={match}
+                      prediction={v2Match?.prediction}
                       topMarket={marketData.label}
                       topProb={marketData.prob}
                       bttsProb={bttsData?.prob || 0}

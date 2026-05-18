@@ -299,14 +299,40 @@ export function calculateHybridPrediction(
 }
 
 /**
- * Momentum algorithm: -1 to +1
+ * Momentum algorithm: -1 to +1 (Bayesian Pressure Matrix)
  */
 export function calculateMomentum(stats: Stats | null | undefined): number {
   if (!stats) return 0;
-  const homeWeight = ((stats.shotsHome || 0) * 0.5) + ((stats.xgHome || 0) * 1.5);
-  const awayWeight = ((stats.shotsAway || 0) * 0.5) + ((stats.xgAway || 0) * 1.5);
-  const total = homeWeight + awayWeight;
+  
+  // Weights for different metrics (v2 logic)
+  const weights = {
+    shots: 0.4,
+    sot: 0.8,
+    xg: 1.5,
+    dangerousAttacks: 0.35,
+    corners: 0.25,
+    attacks: 0.1
+  };
+
+  const homePressure = 
+    ((stats.shotsHome || 0) * weights.shots) + 
+    ((stats.shotsOnTargetHome || 0) * weights.sot) +
+    ((stats.xgHome || 0) * weights.xg) +
+    ((stats.dangerousAttacksHome || 0) * weights.dangerousAttacks) +
+    ((stats.attacksHome || 0) * weights.attacks) +
+    ((stats.cornersHome || 0) * weights.corners);
+    
+  const awayPressure = 
+    ((stats.shotsAway || 0) * weights.shots) + 
+    ((stats.shotsOnTargetAway || 0) * weights.sot) +
+    ((stats.xgAway || 0) * weights.xg) +
+    ((stats.dangerousAttacksAway || 0) * weights.dangerousAttacks) +
+    ((stats.attacksAway || 0) * weights.attacks) +
+    ((stats.cornersAway || 0) * weights.corners);
+    
+  const total = homePressure + awayPressure;
   
   if (total === 0 || isNaN(total)) return 0;
-  return (homeWeight - awayWeight) / total;
+  // Normalized between -1 (Pure Away pressure) and +1 (Pure Home pressure)
+  return (homePressure - awayPressure) / total;
 }

@@ -62,6 +62,24 @@ export interface Stats {
   foulsAway?: number;
   yellowCardsHome?: number;
   yellowCardsAway?: number;
+  redCardsHome?: number;
+  redCardsAway?: number;
+  attacksHome?: number;
+  attacksAway?: number;
+  dangerousAttacksHome?: number;
+  dangerousAttacksAway?: number;
+  shotsOffTargetHome?: number;
+  shotsOffTargetAway?: number;
+  blockedShotsHome?: number;
+  blockedShotsAway?: number;
+  bigChancesHome?: number;
+  bigChancesAway?: number;
+  savesHome?: number;
+  savesAway?: number;
+  passesHome?: number;
+  passesAway?: number;
+  accuratePassesHome?: number;
+  accuratePassesAway?: number;
 }
 
 export interface Prediction {
@@ -70,13 +88,25 @@ export interface Prediction {
   awayWinProb: number;
   scoreline?: string;
   winProbHome?: number;
-  source: 'BZZOIRO_AI' | 'ODDS_IMPLICIT' | 'HEURISTIC' | 'ENSEMBLE_FIXED_V3' | 'MARKET' | 'GENERIC';
+  source: string;
   confidence: number;
   btts: boolean;
   bttsProb?: number;
   over15Prob?: number;
   over25Prob?: number;
   over35Prob?: number;
+  recommendations?: {
+    favorito?: 'H' | 'A' | 'D';
+    favorite_prob?: number;
+    bet_favorite?: boolean;
+    over_15?: boolean;
+    over_25?: boolean;
+    over_35?: boolean;
+    btts?: boolean;
+    ganador?: boolean;
+    value_detected?: boolean;
+    opportunity_market?: string;
+  };
   reasoning?: string;
   bttsReasoning?: string;
 }
@@ -247,6 +277,30 @@ export interface H2HHistory {
   xgHome: number;
   xgAway: number;
   possessionHome: number;
+}
+
+export interface TVChannel {
+  id: number;
+  name: string;
+  country_code: string;
+  link: string;
+}
+
+export interface Broadcast {
+  id: number;
+  event_id: number;
+  home_team_id: number;
+  home_team: string;
+  away_team_id: number;
+  away_team: string;
+  league_id: number;
+  league_name: string;
+  event_date: string;
+  country_code: string;
+  channel_id: number;
+  channel_name: string;
+  channel_link: string;
+  scheduled_start_time: string;
 }
 
 export interface Competition {

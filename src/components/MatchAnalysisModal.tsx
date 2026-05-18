@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, Activity, TrendingUp, History, BarChart3, ShieldCheck, Zap, Info } from 'lucide-react';
-import { Event, Stats, Prediction, OddMarket, H2HHistory, cn } from '../types';
+import { X, Sparkles, Activity, History, BarChart3, ShieldCheck, Target } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Event, Prediction, OddMarket, cn } from '../types';
 import { api } from '../services/api';
 import { generatePredictionAnalysis } from '../lib/gemini';
 import { TeamLogo } from './TeamLogo';
@@ -17,7 +18,7 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'analysis' | 'stats' | 'h2h'>('analysis');
   const [prediction, setPrediction] = useState<Prediction | null>(null);
-  const [odds, setOdds] = useState<OddMarket | null>(null);
+  const [, setOdds] = useState<OddMarket | null>(null);
   
   const { 
     homeForm, 
@@ -29,8 +30,12 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
     awayXG, 
     homeAvgGoals, 
     awayAvgGoals, 
+    projectedScore,
+    probLocal,
+    probBTTS,
+    probOver25,
     loading: dataLoading 
-  } = usePredictionData(match || undefined);
+  } = usePredictionData(match || null);
 
   useEffect(() => {
     if (!match) {
@@ -44,7 +49,7 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
     const fetchBaseData = async () => {
       try {
         const [predData, oddsData] = await Promise.all([
-          api.getPredictions(match.id),
+          api.getEventPrediction(match.id),
           api.getOdds(match.id)
         ]);
         setPrediction(predData);
@@ -57,7 +62,7 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
   }, [match]);
 
   useEffect(() => {
-    if (!match || analysisText || dataLoading || !homeForm.length) return;
+    if (!match || analysisText || dataLoading) return;
 
     const fetchAnalysis = async () => {
       setAnalyzing(true);
@@ -68,25 +73,27 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
           homeForm,
           awayForm,
           h2h,
-          homeXG,
-          awayXG,
-          homeAvgGoals,
-          awayAvgGoals,
+          homeXG: homeXG || 1.25,
+          awayXG: awayXG || 1.15,
+          homeAvgGoals: homeAvgGoals || 1.3,
+          awayAvgGoals: awayAvgGoals || 1.2,
           topMarket: 'Resultado Final', // simplified for modal
-          topProb: 0.65, // placeholder if not fetched
-          bttsProb: 0.5,
-          over25Prob: 0.5
+          topProb: prediction?.homeWinProb || probLocal || 0.65,
+          bttsProb: prediction?.bttsProb || probBTTS || 0.5,
+          over25Prob: prediction?.over25Prob || probOver25 || 0.5,
+          matchId: match.id
         });
+        
         setAnalysisText(text);
       } catch (err) {
-        setAnalysisText("El análisis de IA sugiere un encuentro táctico cerrado. El modelo BSD favorece al equipo local basándose en el control de xG reciente y la solidez defensiva demostrada en los últimos 5 encuentros.");
+        setAnalysisText(`**Veredicto Táctico:** Basado en la tendencia estadística de ${match.homeTeam} y ${match.awayTeam}, se espera un encuentro con alto volumen de juego en el tercio medio.`);
       } finally {
         setAnalyzing(false);
       }
     };
 
     fetchAnalysis();
-  }, [match, dataLoading, homeForm, analysisText]);
+  }, [match?.id, dataLoading, analysisText]);
 
   if (!match) return null;
 
@@ -179,74 +186,82 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
                   exit={{ opacity: 0, x: 10 }}
                   className="space-y-8"
                 >
-                  {/* AI Prediction Summary */}
-                  <div className="glass-card p-6 rounded-3xl border-l-4 border-brand-green relative overflow-hidden bg-brand-green/5">
-                    <div className="absolute top-4 right-4 opacity-20">
-                      <Zap className="w-12 h-12 text-brand-green" />
+                  {/* AI Deep Analysis Branding Header */}
+                  <div className="space-y-2 mb-8">
+                    <h4 className="text-3xl md:text-4xl font-display font-black text-white uppercase leading-none tracking-tighter">
+                      Análisis <br/> Profundos de IA
+                    </h4>
+                    <p className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Algoritmo Predictivo BSD Core V3.0</p>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-brand-green mb-6">
+                    <div className="w-10 h-10 rounded-full border-2 border-brand-green/30 flex items-center justify-center relative">
+                      <div className="absolute inset-0 rounded-full border-2 border-brand-green/20 animate-ping opacity-20" />
+                      <Target className="w-5 h-5" />
+                    </div>
+                    <span className="text-sm font-black uppercase tracking-[0.3em]">Veredicto Táctico Final</span>
+                  </div>
+
+                  {/* Deep Analysis Content Block */}
+                  <div className="relative p-8 bg-gradient-to-br from-brand-bg-secondary to-brand-bg-primary rounded-[2.5rem] border border-brand-green/10 shadow-2xl overflow-hidden group/modal-analysis">
+                    {/* Visual Decorative Element */}
+                    <div className="absolute top-0 right-0 p-8 opacity-5">
+                      <Sparkles className="w-24 h-24 text-brand-green" />
                     </div>
                     
-                    <h4 className="text-[11px] font-black uppercase tracking-widest text-brand-green mb-4 flex items-center gap-2">
-                       <Zap className="w-4 h-4" /> Resumen de Probabilidad
-                    </h4>
-
-                    {prediction ? (
-                      <div className="grid grid-cols-3 gap-6 mb-6">
-                        <div className="text-center">
-                          <div className="text-2xl font-mono font-black text-white">{(prediction.homeWinProb * 100).toFixed(0)}%</div>
-                          <div className="text-[9px] font-black text-brand-text-muted uppercase mt-1">Local</div>
+                    {/* Accent Line */}
+                    <div className="absolute left-0 top-10 bottom-10 w-1.5 bg-brand-green rounded-full opacity-60 shadow-[0_0_15px_rgba(34,197,94,0.5)]" />
+                    
+                    <div className="relative z-10">
+                      {analyzing || dataLoading ? (
+                        <div className="space-y-4 animate-pulse">
+                          <div className="h-2 w-full bg-white/10 rounded-full" />
+                          <div className="h-2 w-full bg-white/10 rounded-full" />
+                          <div className="h-2 w-full bg-white/10 rounded-full" />
+                          <div className="h-2 w-3/4 bg-white/10 rounded-full" />
                         </div>
-                        <div className="text-center border-x border-white/5">
-                          <div className="text-2xl font-mono font-black text-white">{(prediction.drawProb * 100).toFixed(0)}%</div>
-                          <div className="text-[9px] font-black text-brand-text-muted uppercase mt-1">Empate</div>
+                      ) : (
+                        <div className="prose prose-invert max-w-none prose-sm md:prose-base analysis-markdown pl-6">
+                           <ReactMarkdown>
+                             {analysisText || "**Análisis BSD:** Cargando inteligencia táctica..."}
+                           </ReactMarkdown>
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-mono font-black text-white">{(prediction.awayWinProb * 100).toFixed(0)}%</div>
-                          <div className="text-[9px] font-black text-brand-text-muted uppercase mt-1">Visita</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="h-20 flex items-center justify-center animate-pulse">
-                        <p className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest italic">Calculando matriz de probabilidad...</p>
-                      </div>
-                    )}
-
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3">
-                        <div className="p-1.5 bg-brand-green/10 rounded-lg shrink-0">
-                          <Sparkles className="w-4 h-4 text-brand-green" />
-                        </div>
-                        {analyzing || dataLoading ? (
-                          <div className="space-y-2 flex-1 animate-pulse pt-1">
-                            <div className="h-2 bg-white/10 rounded-full w-full" />
-                            <div className="h-2 bg-white/10 rounded-full w-5/6" />
-                            <div className="h-2 bg-white/10 rounded-full w-4/6" />
-                          </div>
-                        ) : (
-                          <p className="text-sm text-brand-text-muted leading-relaxed italic font-sans py-1">
-                            "{analysisText}"
-                          </p>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Market Insights */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-brand-bg-secondary/40 p-6 rounded-3xl border border-white/5">
-                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-text-muted mb-4">Métricas de Ataque IA</h5>
-                      <div className="space-y-4">
-                        <MarketStat label="Goles Proyectados (xG)" home={homeAvgGoals} away={awayAvgGoals} max={3} />
-                        <MarketStat label="Peligro Generado" home={homeXG} away={awayXG} max={2.5} />
-                      </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-text-muted">Proyección Directa</span>
+                    <div className="px-3 py-1 bg-brand-green/10 border border-brand-green/20 rounded-full">
+                       <span className="text-[10px] font-black text-brand-green font-mono uppercase tracking-widest">{projectedScore !== '?-?' ? projectedScore : '1-0'}</span>
                     </div>
-                    <div className="bg-brand-bg-secondary/40 p-6 rounded-3xl border border-white/5">
-                      <h5 className="text-[10px] font-black uppercase tracking-widest text-brand-text-muted mb-4">Probabilidad de Otros Mercados</h5>
-                      <div className="space-y-4">
-                        <ProbabilityLine label="Over 2.5 Goles" prob={prediction?.over25Prob || 0.45} />
-                        <ProbabilityLine label="Ambos Anotan (BTTS)" prob={prediction?.bttsProb || 0.52} />
-                        <ProbabilityLine label="Over 0.5 HT" prob={0.68} />
-                      </div>
-                    </div>
+                  </div>
+
+                  {/* Probability Summary with Enhanced Visuals */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     {[
+                       { label: 'Victoria Local', prob: probLocal, color: 'brand-green' },
+                       { label: 'Empate', prob: 1 - probLocal - (1 - probLocal) * 0.4, color: 'brand-yellow' },
+                       { label: 'Victoria Visita', prob: (1 - probLocal) * 0.4, color: 'brand-blue' }
+                     ].map((p, idx) => (
+                       <div key={idx} className="bg-white/[0.02] p-4 rounded-3xl border border-white/5 flex flex-col items-center">
+                         <span className="text-[9px] font-black uppercase text-brand-text-muted mb-2 tracking-[0.2em]">{p.label}</span>
+                         <span className={cn("text-2xl font-mono font-black", `text-${p.color}`)}>
+                           {((p.prob || 0) * 100).toFixed(0)}%
+                         </span>
+                         <div className="w-full h-1 bg-white/5 rounded-full mt-3 overflow-hidden">
+                           <div className={cn("h-full", `bg-${p.color}/50`)} style={{ width: `${(p.prob || 0) * 100}%` }} />
+                         </div>
+                       </div>
+                     ))}
+                  </div>
+
+                  {/* Market Probabilities (Horizontal Small Cards) */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-4">
+                    <SimpleMarketCard label="BTTS" val={probBTTS} />
+                    <SimpleMarketCard label="Over 2.5" val={probOver25} />
+                    <SimpleMarketCard label="Ambos Marca" val={probBTTS} />
+                    <SimpleMarketCard label="Goles HT" val={probOver25 * 0.7} />
                   </div>
                 </motion.div>
               )}
@@ -467,6 +482,16 @@ function TacticalStat({ label, home, away, unit = '' }: { label: string, home: n
         </div>
         <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-brand-bg-primary -translate-x-1/2" />
       </div>
+    </div>
+  );
+}
+
+function SimpleMarketCard({ label, val }: { label: string, val: number }) {
+  const percent = Math.round(val * 100);
+  return (
+    <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex flex-col items-center">
+      <span className="text-[7px] font-black uppercase text-brand-text-muted mb-1 tracking-widest">{label}</span>
+      <span className="text-xs font-mono font-black text-white">{percent}%</span>
     </div>
   );
 }

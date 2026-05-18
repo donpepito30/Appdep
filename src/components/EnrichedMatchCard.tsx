@@ -263,7 +263,7 @@ export const EnrichedMatchCard: React.FC<EnrichedMatchCardProps> = memo(({
         {/* Right: Odds + Stars */}
         <div className="flex flex-col items-end shrink-0 space-y-1.5 pl-2">
           <div className="text-[10px] font-mono font-black text-brand-green bg-brand-green/5 px-1.5 py-0.5 rounded border border-brand-green/10">
-            {(match as any).odds_avg ? `@${(match as any).odds_avg.toFixed(2)}` : (probValue > 80 ? '@1.35' : probValue > 65 ? '@1.85' : '@2.10')}
+            {(match as any).odds_avg ? `@${(match as any).odds_avg.toFixed(2)}` : 'INC'}
           </div>
           <div className="flex space-x-0.5">
             {badgeData?.stars.split('').map((s, i) => (
