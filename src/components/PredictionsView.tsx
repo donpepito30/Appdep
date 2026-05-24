@@ -48,7 +48,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
         <div className="w-16 h-16 rounded-full bg-brand-bg-secondary flex items-center justify-center border border-white/5 animate-pulse">
           <Calendar className="w-8 h-8 text-brand-text-muted" />
         </div>
-        <p className="text-brand-text-muted font-black uppercase text-[10px] tracking-[0.3em]">Sincronizando calendario de predicciones...</p>
+        <p className="text-brand-text-muted font-black uppercase text-[10px] tracking-[0.3em]">Cargando calendario...</p>
       </div>
     );
   }
@@ -63,22 +63,22 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
               <Sparkles className="w-6 h-6 text-brand-green" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-brand-text-white uppercase tracking-tight">Ecosistema Predictivo BSD AI</h3>
+              <h3 className="text-xl font-black text-brand-text-white uppercase tracking-tight">Pronósticos para hoy</h3>
               <p className="text-xs text-brand-text-muted mt-2 leading-relaxed">
-                Análisis multivariante basado en <span className="text-brand-green font-bold">Deep Learning</span> para los próximos 3 días. Nuestro sistema procesa más de 50 variables por encuentro.
+                Análisis de rendimiento y métricas avanzadas para los próximos encuentros.
               </p>
               <div className="flex gap-4 mt-6">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Model Index</span>
-                  <span className="text-sm font-mono font-black text-brand-green">SINC v2.4</span>
+                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Sinc</span>
+                  <span className="text-sm font-mono font-black text-brand-green">OK</span>
                 </div>
                 <div className="flex flex-col border-l border-brand-border pl-4">
-                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Partidos Analizados</span>
+                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Eventos</span>
                   <span className="text-sm font-mono font-black text-white">{allUpcoming.length}</span>
                 </div>
                 {allUpcoming.some(m => v2Predictions[m.id]?.recommendations?.value_detected) && (
-                  <div className="flex flex-col border-l border-brand-red pl-4 animate-pulse">
-                    <span className="text-[10px] font-black text-brand-red uppercase tracking-widest">Valor Detectado</span>
+                  <div className="flex flex-col border-l border-brand-border pl-4">
+                    <span className="text-[10px] font-black text-brand-red uppercase tracking-widest">Oportunidad</span>
                     <span className="text-sm font-mono font-black text-brand-red">ALERTA</span>
                   </div>
                 )}
@@ -90,10 +90,10 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
         <div className="glass-card p-6 rounded-[2rem] border border-brand-yellow/20 bg-brand-yellow/5 flex flex-col justify-center">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="w-4 h-4 text-brand-yellow" />
-              <span className="text-[10px] font-black text-brand-yellow uppercase tracking-widest">AI Market Outlook</span>
+              <span className="text-[10px] font-black text-brand-yellow uppercase tracking-widest">Tendencia del Día</span>
             </div>
             <p className="text-[11px] text-brand-text-muted uppercase font-bold tracking-tight leading-normal">
-              Tendencia alcista en mercados de <span className="text-white">Goles HT</span> y <span className="text-white">Hándicaps Asiáticos</span> para la jornada de hoy.
+              Mercados de <span className="text-white">Goles</span> y <span className="text-white">Doble Oportunidad</span> presentan la mayor estabilidad hoy.
             </p>
         </div>
       </div>
@@ -106,7 +106,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
               <Sparkles className="w-4 h-4 text-brand-yellow" />
             </div>
             <h2 className="text-xl font-black text-brand-text-white tracking-wide uppercase">
-              Selección <span className="text-brand-yellow italic">EL BANQUERO</span> BSD
+              Selección <span className="text-brand-yellow italic">Principal</span>
             </h2>
           </div>
           
@@ -144,7 +144,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
               <TrendingUp className="w-4 h-4 text-brand-green" />
             </div>
             <h2 className="text-xl font-black text-brand-text-white tracking-wide uppercase">
-              Predicciones <span className="text-brand-green">BSD PRO</span>
+              Predicciones <span className="text-brand-green">Destacadas</span>
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
@@ -185,7 +185,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
                     {label} <span className="text-brand-text-muted font-mono font-medium ml-2">— {dateStr}</span>
                   </h2>
                   <p className="text-[10px] text-brand-text-muted font-bold tracking-widest uppercase mt-0.5">
-                    {matches.length} PARTIDOS ANALIZADOS
+                    {matches.length} ENCUENTROS
                   </p>
                 </div>
               </div>

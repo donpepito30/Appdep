@@ -937,8 +937,8 @@ export const api = {
   getTVChannelEmissions: async (channelId: number, options?: { leagueId?: number, seasonId?: number }): Promise<Broadcast[]> => {
     try {
       const q = new URLSearchParams();
-      if (options?.leagueId) q.append('ID de liga', options.leagueId.toString());
-      if (options?.seasonId) q.append('ID de temporada', options.seasonId.toString());
+      if (options?.leagueId) q.append('ID_liga', options.leagueId.toString());
+      if (options?.seasonId) q.append('ID_temporada', options.seasonId.toString());
       return await fetchSeguro(`canales-de-tv/${channelId}/emisiones/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
     } catch { return []; }
   },

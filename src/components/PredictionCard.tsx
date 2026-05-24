@@ -67,15 +67,15 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
         
         setAnalysisText(text);
       } catch (err) {
-        setAnalysisText(`### 🤖 PROYECCIÓN IA BSD (OFFLINE)
-**Contexto Táctico:** Basado en la forma reciente (${homeForm.join('')}), se proyecta un encuentro donde ${match.homeTeam} buscará imponer condiciones desde la posesión.`);
+        setAnalysisText(`### Resumen de Rendimiento
+**Análisis:** Basado en la forma reciente, se espera que el equipo local tome la iniciativa desde el inicio.`);
       } finally {
         setAnalyzing(false);
       }
     };
 
     fetchAnalysis();
-  }, [isVisible, dataLoading, match.id, finalMarket]);
+  }, [isVisible, isExpanded, dataLoading, match.id, finalMarket]);
 
   const isFrozen = !!match.id && !!localStorage.getItem(`bsd_analysis_v3_${match.id}`);
 
@@ -86,7 +86,7 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
   };
 
   const getAiSummarySnippet = () => {
-    if (!analysisText) return "Sincronizando análisis táctico de profundidad...";
+    if (!analysisText) return "Consultando datos del encuentro...";
     
     // Clean up markdown
     let clean = analysisText
@@ -146,7 +146,7 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
         <div className="absolute top-0 right-0 px-4 py-1.5 bg-brand-yellow/20 border-l border-b border-brand-yellow/30 rounded-bl-2xl z-20 backdrop-blur-md">
            <div className="flex items-center gap-1.5">
              <Sparkles className="w-3 h-3 text-brand-yellow fill-brand-yellow" />
-             <span className="text-[7.5px] font-black text-brand-yellow uppercase tracking-[0.3em]">AI BANKER SELECTION</span>
+             <span className="text-[7.5px] font-black text-brand-yellow uppercase tracking-[0.3em]">SELECCIÓN DESTACADA</span>
            </div>
         </div>
       )}
@@ -154,8 +154,8 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
       {/* Freeze Indicator Badge */}
       {isFrozen && (
         <div className="absolute top-0 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-4 py-1.5 bg-brand-green/20 border-x border-b border-brand-green/30 rounded-b-2xl z-20 backdrop-blur-md">
-           <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
-           <span className="text-[7.5px] font-black text-brand-green uppercase tracking-[0.3em]">BSD-ENTROPY V3 LOCKED</span>
+           <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
+           <span className="text-[7.5px] font-black text-brand-green uppercase tracking-[0.3em]">ANALIZADO POR IA</span>
         </div>
       )}
 
@@ -190,9 +190,6 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
             <div className="text-2xl font-black font-display text-brand-text-white/40 tracking-tighter mb-1 select-none">
               {prediction?.scoreline || (projectedScore !== '?-?' ? projectedScore : "1-0")}
             </div>
-            <div className="px-2 py-0.5 rounded-full bg-brand-green/10 border border-brand-green/20">
-              <span className="text-[7px] font-black text-brand-green uppercase tracking-[0.2em]">PROYECTO</span>
-            </div>
           </div>
 
           <div className="flex flex-col items-center flex-1 max-w-[40%]">
@@ -219,7 +216,7 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
             )}
             <div className="py-0.5 px-2 bg-brand-green/10 border-l border-b border-brand-green/20 rounded-bl-lg">
               <span className="text-[7px] font-black text-brand-green tracking-widest uppercase">
-                {prediction?.source || 'Ensemble V2'}
+                Probabilidad
               </span>
             </div>
           </div>
@@ -266,7 +263,7 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
             )}
           >
             <Sparkles className="w-4 h-4" />
-            {isExpanded ? 'Ocultar Análisis Pro' : 'Ver Análisis Pro'}
+            {isExpanded ? 'Cerrar Detalles' : 'Ver Detalles'}
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
           
@@ -296,17 +293,16 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
                 {/* Visual Header */}
                 <div className="space-y-1">
                   <h3 className="text-3xl font-display font-black text-brand-text-white uppercase leading-none tracking-tighter">
-                    Análisis <br/> Especializado
+                    Análisis
                   </h3>
-                  <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Algoritmo Predictivo BSD Core V3.0</p>
+                  <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Basado en rendimiento e historial</p>
                 </div>
 
                 <div className="flex items-center gap-4 text-brand-green mb-4">
-                  <div className="w-10 h-10 rounded-full border-2 border-brand-green/30 flex items-center justify-center relative">
-                    <div className="absolute inset-0 rounded-full border-2 border-brand-green/20 animate-ping opacity-20" />
+                  <div className="w-10 h-10 rounded-full border-2 border-brand-green/30 flex items-center justify-center">
                     <Target className="w-5 h-5" />
                   </div>
-                  <span className="text-sm font-black uppercase tracking-[0.3em]">Veredicto Táctico Final</span>
+                  <span className="text-sm font-black uppercase tracking-[0.3em]">Análisis Técnico</span>
                 </div>
                 
                 {analyzing || dataLoading ? (
@@ -349,7 +345,7 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
                       <div className="mt-8 p-6 bg-brand-green/5 border border-brand-green/20 rounded-3xl">
                         <div className="flex items-center gap-3 mb-4">
                           <ShieldCheck className="w-5 h-5 text-brand-green" />
-                          <h4 className="text-xs font-black uppercase text-white tracking-widest">Refinamiento de Veredicto BSD</h4>
+                          <h4 className="text-xs font-black uppercase text-white tracking-widest">Resumen de Seguimiento</h4>
                         </div>
                         <div className="space-y-3">
                           <div className="flex justify-between items-center text-[10px] uppercase font-bold text-brand-text-muted">
@@ -357,8 +353,8 @@ export function PredictionCard({ match, prediction, topMarket, topProb, bttsProb
                             <span className="text-brand-green font-mono">{match.homeScore} - {match.awayScore}</span>
                           </div>
                           <div className="flex justify-between items-center text-[10px] uppercase font-bold text-brand-text-muted">
-                            <span>Estado de Predicción</span>
-                            <span className="text-brand-green font-mono">EN AUDITORÍA</span>
+                            <span>Estado</span>
+                            <span className="text-brand-green font-mono">FINALIZADO</span>
                           </div>
                         </div>
                       </div>

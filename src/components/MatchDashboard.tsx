@@ -255,7 +255,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
             </div>
             <div className="flex flex-col min-w-0 notranslate cursor-pointer" translate="no" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: match.homeLogo, leagueId: match.leagueId }); }}>
               <h2 className="text-[11px] sm:text-sm md:text-xl font-bold tracking-tight text-brand-text-white truncate hover:text-brand-green transition-colors">{match.homeTeam}</h2>
-              <span className="text-[7px] md:text-[10px] text-brand-green uppercase font-black tracking-widest truncate">{match.leagueName || 'BSD_LIVE'}</span>
+              <span className="text-[7px] md:text-[10px] text-brand-green uppercase font-black tracking-widest truncate">{match.leagueName || 'PARTIDO EN VIVO'}</span>
             </div>
           </div>
 
@@ -300,12 +300,12 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
         {[
           { id: 'summary', label: 'Resumen', icon: Activity },
           { id: 'predictions', label: 'Predicciones', icon: Zap },
-          { id: 'h2h', label: 'Historial H2H', icon: Swords },
-          { id: 'strategy', label: 'IA Estrategia', icon: Target },
+          { id: 'h2h', label: 'Historial', icon: Swords },
+          { id: 'strategy', label: 'Estrategia', icon: Target },
           { id: 'stats', label: 'Análisis', icon: BarChart3 },
           { id: 'incidents', label: 'Incidentes', icon: History },
           { id: 'lineups', label: 'Alineaciones', icon: Users },
-          { id: 'ai', label: 'IA Insights', icon: Sparkles },
+          { id: 'ai', label: 'Insights', icon: Sparkles },
           { id: 'social', label: 'Social', icon: MessageSquare },
           { id: 'broadcasts', label: 'TV', icon: Tv },
           { id: 'shotmap', label: 'Tiros', icon: Crosshair }
@@ -513,7 +513,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                       <Zap className="w-12 h-12 text-brand-green animate-pulse" />
                       <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-brand-green/40 opacity-50" />
                     </div>
-                    <p className="text-brand-text-muted italic uppercase text-[10px] font-black tracking-[0.3em] animate-pulse">Sincronizando modelos predictivos...</p>
+                    <p className="text-brand-text-muted italic uppercase text-[10px] font-black tracking-[0.3em] animate-pulse">Analizando variables tácticas...</p>
                   </div>
                 ) : (
                   <div className="space-y-10">
@@ -546,21 +546,21 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                             <div className="space-y-3 text-center md:text-left">
                               <div className="flex items-center justify-center md:justify-start gap-2 text-brand-green">
                                 <Sparkles className="w-5 h-5 animate-pulse" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.4em]">Mejor Oportunidad Detectada</span>
+                                <span className="text-[10px] font-black uppercase tracking-[0.4em]">Sugerencia</span>
                               </div>
                               <h3 className="text-2xl md:text-5xl font-display font-black text-brand-text-white uppercase tracking-tighter">
                                 {best.label} <span className="text-brand-green">@{best.odd.toFixed(2)}</span>
                               </h3>
                               <p className="text-[11px] text-brand-text-muted font-medium max-w-md">
-                                Discrepancia estadística del <span className="text-brand-green font-bold italic">+{bestValue.toFixed(1)}%</span> entre la probabilidad implícita del mercado y nuestra Red Bayesiana.
+                                Basado en la probabilidad detectada vs cuota actual.
                               </p>
                             </div>
                             <div className="flex items-center gap-6">
                               <div className="text-right">
-                                <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-1">Confianza IA</div>
+                                <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-1">Precisión</div>
                                 <div className="text-4xl font-mono font-black text-brand-green">{(best.prob * 100).toFixed(0)}%</div>
                               </div>
-                              <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-brand-green flex items-center justify-center shadow-[0_0_30px_rgba(34,197,94,0.4)] group-hover:scale-110 transition-transform">
+                              <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-brand-green flex items-center justify-center shadow-[0_0_30px_rgba(34,197,94,0.4)] transition-transform">
                                 <TrendingUp className="w-8 h-8 md:w-10 md:h-10 text-black" />
                               </div>
                             </div>
@@ -612,7 +612,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                       <div className="glass-card p-8 rounded-[2rem] border border-brand-border shadow-2xl relative overflow-hidden flex flex-col justify-center items-center text-center">
                         <div className="absolute inset-0 bg-gradient-to-br from-brand-green/10 via-transparent to-brand-red/10 opacity-30" />
                         <div className="relative z-10 space-y-6 w-full">
-                          <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] italic mb-4">Marcador proyectado (BSD Fixed Model)</h4>
+                          <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] mb-4">Marcador</h4>
                           <div className="flex items-center justify-center space-x-8">
                              <TeamLogo name={match.homeTeam} size="sm" className="w-10 h-10 grayscale group-hover:grayscale-0 transition-all" />
                              <div className="text-5xl md:text-6xl font-black font-display text-brand-text-white tracking-tighter bg-white/5 px-6 py-4 rounded-[2rem] border border-white/10 shadow-[inner_0_4px_20px_rgba(0,0,0,0.5)]">
@@ -634,7 +634,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                           </div>
                           <div className="flex items-center justify-center gap-2">
                              <Sparkles className="w-4 h-4 text-brand-green" />
-                             <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.2em]">BSD ALGORITHM v4.2 FINAL</span>
+                             <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.2em]">ANÁLISIS COMPLETADO</span>
                           </div>
                         </div>
                       </div>
@@ -661,18 +661,10 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                     </div>
 
                     {/* Methodology Footer */}
-                    <div className="p-5 bg-brand-bg-primary/40 rounded-3xl border border-brand-border/30">
-                       <div className="flex items-start gap-4">
-                          <div className="p-2.5 bg-brand-blue/10 rounded-xl shrink-0">
-                             <Info className="w-5 h-5 text-brand-blue" />
-                          </div>
-                          <div className="space-y-1">
-                             <p className="text-[10px] text-brand-text-muted uppercase font-black tracking-widest">Metodología IA</p>
-                             <p className="text-[11px] text-brand-text-muted leading-relaxed">
-                                Estas proyecciones se basan en un <span className="text-brand-green font-bold">Modelo Matemático Estático</span> alimentado por modelos de Poisson, Machine Learning y Consenso de Mercado. A diferencia del momentum en vivo, esta predicción es <span className="text-brand-green font-bold">Fija y Analítica</span> para garantizar una base sólida en la toma de decisiones.
-                             </p>
-                          </div>
-                       </div>
+                    <div className="p-4 bg-brand-bg-primary/40 rounded-3xl border border-brand-border/10">
+                       <p className="text-[10px] text-brand-text-muted leading-relaxed italic text-center">
+                          Análisis basado en datos históricos y rendimiento actual para una toma de decisiones informada.
+                       </p>
                     </div>
                   </div>
                 )}
@@ -718,7 +710,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                       <Sparkles className="w-5 h-5 text-brand-green animate-pulse" />
                     </div>
                     <h4 className="text-[10px] font-bold text-brand-green uppercase tracking-widest mb-3 flex items-center">
-                      Vista Previa de IA (vía BSD)
+                      Resumen del Encuentro
                     </h4>
                     <p className="text-sm text-brand-text-light leading-relaxed font-sans mt-2 whitespace-pre-wrap italic">
                       {metadata.ai_preview.text}
@@ -1221,7 +1213,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                               </div>
                            </div>
                            <div className="bg-brand-bg-primary/40 p-5 rounded-2xl border border-white/5 flex flex-col justify-between h-24 md:h-32">
-                              <span className="text-[8px] text-brand-text-muted font-bold uppercase tracking-widest">Momentum IA</span>
+                              <span className="text-[8px] text-brand-text-muted font-bold uppercase tracking-widest">Momentum</span>
                               <div className="flex items-baseline gap-2">
                                  <span className="text-2xl md:text-4xl font-mono font-black text-brand-blue">{(Math.abs(momentum) * 10).toFixed(1)}</span>
                                  <span className="text-[9px] font-bold text-brand-text-muted uppercase">Índice</span>
@@ -1316,7 +1308,7 @@ function MarketPredictionCard({
           <div className="mb-4 p-3 bg-brand-green/5 border border-brand-green/10 rounded-xl">
             <div className="flex items-center gap-1.5 mb-1.5">
               <ShieldCheck className="w-3 h-3 text-brand-green" />
-              <span className="text-[8px] font-black uppercase tracking-widest text-brand-green">Fundamento Estadístico</span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-brand-green">Detalles</span>
             </div>
             <p className="text-[10px] leading-relaxed text-brand-text-muted italic">
               {reasoning}
@@ -1327,8 +1319,8 @@ function MarketPredictionCard({
 
       <div className="space-y-2">
         <div className="flex justify-between items-center text-[8px] font-bold uppercase tracking-widest text-brand-text-muted">
-          <span>Confianza IA</span>
-          <span>BSD 4.2</span>
+          <span>Precisión</span>
+          <span>IA</span>
         </div>
         <div className="h-1.5 bg-brand-bg-primary rounded-full overflow-hidden border border-white/5 p-0.5">
           <motion.div 
@@ -1458,13 +1450,13 @@ function OddCard({ label, odd, myProb }: { label: string, odd?: number, myProb?:
         <div className="mt-1 w-full text-center border-t border-brand-border/50 pt-3">
           {value > 10 ? (
             <div className="space-y-1">
-              <span className="inline-block bg-[#16A34A] text-white text-[9px] px-2 py-1 rounded font-bold tracking-tighter w-full uppercase shadow-[0_4px_10px_rgba(22,163,74,0.3)] animate-pulse">🔥 +{value.toFixed(1)}% VALOR ALTO</span>
-              <p className="text-[8px] text-brand-green font-medium">Oportunidad detectada por IA</p>
+              <span className="inline-block bg-[#16A34A] text-white text-[9px] px-2 py-1 rounded font-bold tracking-tighter w-full uppercase shadow-[0_4px_10px_rgba(22,163,74,0.3)] animate-pulse">🔥 +{value.toFixed(1)}% VALOR</span>
+              <p className="text-[8px] text-brand-green font-medium">Oportunidad detectada</p>
             </div>
           ) : value > 5 ? (
-            <span className="inline-block bg-[#EAB308]/20 text-[#EAB308] border border-[#EAB308]/30 text-[9px] px-2 py-1 rounded font-bold tracking-tighter w-full uppercase">🔍 +{value.toFixed(1)}% VALOR MODERADO</span>
+            <span className="inline-block bg-[#EAB308]/20 text-[#EAB308] border border-[#EAB308]/30 text-[9px] px-2 py-1 rounded font-bold tracking-tighter w-full uppercase">🔍 +{value.toFixed(1)}% VALOR</span>
           ) : (
-            <span className="inline-block bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[9px] px-2 py-1 rounded font-mono tracking-tighter w-full uppercase">⚠️ SIN VENTAJA</span>
+            <span className="inline-block bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[9px] px-2 py-1 rounded font-mono tracking-tighter w-full uppercase">NORMAL</span>
           )}
         </div>
       )}

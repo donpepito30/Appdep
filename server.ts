@@ -46,55 +46,42 @@ async function startServer() {
     
     if (!client) {
       return res.json({ 
-        text: `### 🤖 PROYECCIÓN IA BSD (OFFLINE)
+        text: `### Análisis Táctico
 
-**Contexto Táctico y Momentum:** Duelo de alta intensidad entre **${homeTeam}** y **${awayTeam}**. La forma reciente indica una ligera ventaja para el local en la fase de construcción.
+**Contexto:** Encuentro de alta intensidad. La forma reciente favorece al local por su solidez en la fase de construcción.
 
-**Puntos Clave (Key Storylines):**
-- **Presión en Bloque:** ${homeTeam} ejecutará una presión alta para forzar el error en salida.
-- **Transiciones:** ${awayTeam} depende de su velocidad por bandas para romper el repliegue.
-- **Duelos Individuales:** El mediocampo será una zona de fricción constante.
+**Puntos Clave:**
+- **Presión:** El equipo local buscará forzar errores en la salida rival.
+- **Transiciones:** El visitante dependerá de la velocidad por bandas.
+- **Zona de Conflicto:** El mediocampo será decisivo para el control del ritmo.
 
-**Alineaciones Probables (Expected Lineups):**
-- **Home**: Jugadores clave en dinámica 4-3-3.
-- **Away**: Sistema reactivo compacto.
+**Selecciones Recomendadas:**
+- Menos de 3.5 Goles
+- Local o Empate
 
-**Mejores Selecciones (Best Picks):**
-- Market: Under 3.5 Goles (@1.42)
-- Market: Local o Empate (@1.28)
-
-**Veredicto Predicción BSD:** **1-0**. Momentum local decanta el resultado.` 
+**Marcador Proyectado:** **1-0**.` 
       });
     }
 
     try {
       const prompt = `
-        Eres el motor "BSD AI Analyst Elite V3". Genera un ANÁLISIS TÁCTICO DE ULTRA-PROFUNDIDAD para el partido: ${homeTeam} vs ${awayTeam}.
+        Actúa como un analista experto en fútbol internacional. Genera un análisis táctico conciso y profesional para el partido: ${homeTeam} vs ${awayTeam}.
         
-        DATOS BSD CORE:
+        DATOS:
         - Forma ${homeTeam}: ${homeRecentForm.join(', ')}
         - Forma ${awayTeam}: ${awayRecentForm.join(', ')}
-        - Historial H2H: ${h2hSummary}
+        - Historial: ${h2hSummary}
         
-        ESTRUCTURA OBLIGATORIA (Markdown):
-        1. **Contexto Táctico y Momentum**: Analiza el momento de ambos equipos, rachas y necesidad de puntos con tono experto.
-        
-        2. **Puntos Clave (Key Storylines)**: 
-           - Genera 3 bullet points detallados sobre tácticas específicas (presión, bloques, transiciones) o roles de jugadores.
-        
-        3. **Alineaciones Probables (Expected Lineups)**:
-           - Proyecta una lista de jugadores clave para ${homeTeam} y ${awayTeam} basada en su importancia táctica.
-        
-        4. **Mejores Selecciones (Best Picks)**:
-           - Proporciona mercados de alto valor basados en la estadística (p.ej. Under 3.5, Over 1.5).
-        
-        5. **Veredicto Predicción BSD**:
-           - Escribe el marcador exacto proyectado en negrita (p.ej. **2-1**) y la razón definitiva del resultado.
+        ESTRUCTURA (Markdown):
+        1. **Contexto**: Breve análisis del momento actual.
+        2. **Claves Tácticas**: 3 puntos sobre sistemas o roles.
+        3. **Figuras a Seguir**: Jugadores determinantes.
+        4. **Mercados de Valor**: Recomendaciones estadísticas.
+        5. **Veredicto**: Marcador proyectado en negrita y breve conclusión.
         
         REGLAS:
         - Idioma: ESPAÑOL.
-        - Tono: Profesional, periodístico de élite.
-        - Sin introducciones genéricas.
+        - Sé directo, evita introducciones y lenguaje técnico innecesario.
       `;
       
       const response = await client.models.generateContent({
@@ -116,24 +103,22 @@ async function startServer() {
       // If we have a generic error but it's rate limit related, explain it nicely
       if (error?.message?.includes('429') || error?.status === 429) {
         return res.json({
-          text: `### 🤖 SISTEMA IA OCUPADO (RATELIMIT)
+          text: `### Análisis Temporal
           
-**Nota del Analista:** El motor BSD está procesando un alto volumen de datos tácticos en este momento. 
+El sistema está procesando un alto volumen de datos. Según patrones históricos, se proyecta un duelo estratégico.
 
-**Veredicto Táctico:** Basado en patrones históricos para ${homeTeam} y ${awayTeam}, se proyecta un duelo estratégico intenso.
-
-**Marcador Proyectado Estimado:** **1-0** (Local favors).`
+**Marcador Proyectado:** **1-0**.`
         });
       }
 
       res.json({ 
-        text: `### ⚠️ ERROR DE SINCRONIZACIÓN IA
+        text: `### Proyección Táctica
         
-**Veredicto Táctico:** El motor deductivo proyecta un encuentro cerrado basado en tendencias xG.
+Encuentro cerrado basado en tendencias de eficiencia defensiva.
 
 **Puntos Clave:**
-- Estabilidad defensiva de ${awayTeam} vs Efectividad de ${homeTeam}.
-- Probabilidad de empate técnico: 45%.
+- Estabilidad defensiva del visitante vs efectividad local.
+- Probabilidad de empate equilibrada.
 
 **Marcador Proyectado:** **1-1**.` 
       });
@@ -157,37 +142,34 @@ async function startServer() {
     
     if (!client) {
       return res.json({
-        text: `### 🤖 ANÁLISIS DE MERCADO BSD (OFFLINE)
+        text: `### Justificación Técnica
 
-**Justificación Estadística:** La probabilidad del ${(stats.topProb * 100).toFixed(0)}% para **${stats.topMarket}** se fundamenta en la convergencia de xG (${stats.homeXG.toFixed(1)}) y la eficiencia ofensiva local.
+**Análisis:** La probabilidad para **${stats.topMarket}** se fundamenta en la convergencia de xG (${stats.homeXG.toFixed(1)}) y la eficiencia ofensiva actual.
 
 **Puntos Clave:**
-- **[Ataque]**: Convergencia de volumen ofensivo superior al 2.5 xG.
-- **[Defensa]**: Vulnerabilidad en transiciones del equipo visitante.
+- **Ofensiva**: Volumen superior al promedio esperado.
+- **Defensa**: Vulnerabilidad en las transiciones defensivas.
 
-**Veredicto Final:** Marcador proyectable de **2-0** favor local.`
+**Marcador Proyectado:** **2-0**.`
       });
     }
 
     try {
       const prompt = `
-        Eres el motor "BSD Deep Intelligence Engine V3.0". Genera un ANÁLISIS DE ULTRA-PROFUNDIDAD para el partido ${stats.homeTeam} vs ${stats.awayTeam} justificando el mercado "${stats.topMarket}" (${(stats.topProb * 100).toFixed(0)}%).
+        Actúa como un experto en análisis predictivo. Justifica de forma profesional el mercado "${stats.topMarket}" (${(stats.topProb * 100).toFixed(0)}%) para el partido ${stats.homeTeam} vs ${stats.awayTeam}.
         
-        MÉTRICAS BSD:
-        - Forma Reciente: ${stats.homeForm.join('')} vs ${stats.awayForm.join('')}
+        MÉTRICAS:
+        - Forma: ${stats.homeForm.join('')} vs ${stats.awayForm.join('')}
         - xG Proyectado: ${stats.homeXG.toFixed(2)} vs ${stats.awayXG.toFixed(2)}
-        - Goles/Partido: ${stats.homeAvgGoals.toFixed(2)} vs ${stats.awayAvgGoals.toFixed(2)}
-        - H2H: ${stats.h2h.map((h: any) => `${h.homeScore}-${h.awayScore}`).join(', ')}
+        - Goles: ${stats.homeAvgGoals.toFixed(2)} vs ${stats.awayAvgGoals.toFixed(2)}
         
-        ESTRUCTURA OBLIGATORIA (Markdown):
-        1. **Contexto Táctico y Momentum**: Analiza el momento de ambos equipos.
-        2. **Puntos Clave (Key Storylines)**: 3 puntos tácticos específicos sobre jugadores o sistemas.
-        3. **Alineaciones Probables (Expected Lineups)**: Proyecta jugadores clave para ambos equipos.
-        4. **Mejores Selecciones (Best Picks)**: Mercados recomendados con lógica estadística.
-        5. **Veredicto Predicción BSD**: Marcador exacto en negrita y conclusión técnica final.
+        ESTRUCTURA (Markdown):
+        1. **Resumen Táctico**: Análisis del momento de ambos.
+        2. **Factores Decisivos**: 3 puntos clave.
+        3. **Selección Principal**: Justificación del mercado elegido.
+        4. **Marcador Proyectado**: En negrita.
         
-        IDIOMA: ESPAÑOL.
-        TONO: Experto, profesional, analítico.
+        IDIOMA: ESPAÑOL. Conciso, profesional.
       `;
       
       const response = await client.models.generateContent({
@@ -208,26 +190,26 @@ async function startServer() {
 
       if (error?.message?.includes('429') || error?.status === 429) {
         return res.json({
-          text: `### 🤖 SISTEMA IA OCUPADO (RATELIMIT)
+          text: `### Análisis en curso
           
-**Análisis de Mercado:** El motor de predicción está recalibrando modelos de alta densidad.
+El sistema está procesando una alta demanda de datos para este partido.
 
-**Puntos Clave:**
-- Volumen de apuestas concentrado en mercados de goles.
-- Estabilidad de cuotas indica mercado eficiente.
+**Aspectos Clave:**
+- Alta expectativa de movimiento en áreas críticas.
+- Rendimiento histórico consistente.
 
-**Veredicto Proyectado:** Superioridad táctica de ${stats.homeTeam} confirmada.`
+**Proyección:** Ventaja táctica para el equipo local.`
         });
       }
 
       res.json({
-        text: `### ⚠️ ERROR DE ANÁLISIS TÉCNICO
+        text: `### Resumen Técnico
         
-**Análisis Táctico:** La probabilidad para ${stats.topMarket} se basa en la superioridad estructural de ${stats.homeTeam}.
+**Análisis:** La proyección para ${stats.topMarket} se basa en el rendimiento reciente de ${stats.homeTeam}.
 
 **Puntos Clave:**
-- Tendencia H2H favorece el volumen de goles.
-- Curva de xG ascendente en los últimos encuentros.`
+- Tendencia histórica favorable a un juego dinámico.
+- Indicadores de eficiencia ofensiva al alza.`
       });
     }
   });
@@ -236,7 +218,7 @@ async function startServer() {
   app.all(["/api/v2", "/api/v2/*"], async (req, res) => {
     const apiKey = process.env.BZZOIRO_API_KEY || '';
     if (!apiKey) {
-      console.warn('[BSD Proxy] BZZOIRO_API_KEY no configurada - las peticiones a la API fallarán');
+      console.warn('[API Proxy] BZZOIRO_API_KEY no configurada');
     }
     
     // Log incoming proxy request (Disabled to reduce log volume)

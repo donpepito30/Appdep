@@ -126,7 +126,7 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
             <div className="flex flex-col items-center">
               <div className="flex items-center space-x-2 text-brand-green mb-4">
                 <Sparkles className="w-4 h-4 fill-brand-green" />
-                <span className="text-[10px] font-black uppercase tracking-[0.3em]">IA Deep Analysis Engine</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em]">ANÁLISIS DEL ENCUENTRO</span>
               </div>
 
               <div className="flex items-center justify-center gap-6 md:gap-12 w-full max-w-2xl">
@@ -189,9 +189,8 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
                   {/* AI Deep Analysis Branding Header */}
                   <div className="space-y-2 mb-8">
                     <h4 className="text-3xl md:text-4xl font-display font-black text-white uppercase leading-none tracking-tighter">
-                      Análisis <br/> Profundos de IA
+                      Análisis IA
                     </h4>
-                    <p className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Algoritmo Predictivo BSD Core V3.0</p>
                   </div>
 
                   <div className="flex items-center gap-4 text-brand-green mb-6">
@@ -199,7 +198,7 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
                       <div className="absolute inset-0 rounded-full border-2 border-brand-green/20 animate-ping opacity-20" />
                       <Target className="w-5 h-5" />
                     </div>
-                    <span className="text-sm font-black uppercase tracking-[0.3em]">Veredicto Táctico Final</span>
+                    <span className="text-sm font-black uppercase tracking-[0.3em]">Perspectiva Técnica</span>
                   </div>
 
                   {/* Deep Analysis Content Block */}
@@ -409,7 +408,7 @@ export function MatchAnalysisModal({ match, onClose }: MatchAnalysisModalProps) 
           <div className="p-6 bg-brand-bg-secondary/50 border-t border-white/5 flex items-center justify-between shrink-0">
              <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-brand-green" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-brand-text-muted">Análisis Verificado BSD Core</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-brand-text-muted">Procesado con IA</span>
              </div>
              <button 
               onClick={onClose}

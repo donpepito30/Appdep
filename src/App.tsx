@@ -251,16 +251,20 @@ function App() {
       {/* Real-time Synchronization Banner */}
       <div className="w-full bg-brand-bg-card/95 backdrop-blur-md px-2 md:px-4 py-2 flex justify-between items-center border-b border-brand-green/20 shrink-0 z-[60] sticky top-0">
         <div className="flex items-center gap-2 md:gap-3">
-          <RefreshCw className="w-3 h-3 md:w-3.5 md:h-3.5 text-brand-green animate-spin shrink-0" />
-          <span className="font-bold text-brand-text-white text-[8px] md:text-[9px] uppercase tracking-widest hidden sm:inline">Actividad BSD Sincronizada</span>
-          <span className="font-bold text-brand-text-white text-[8px] uppercase tracking-widest sm:hidden">BSD SYNC</span>
+          <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 text-brand-green shrink-0" />
+          <span className="font-bold text-brand-text-white text-[8px] md:text-[9px] uppercase tracking-widest hidden sm:inline">Servicio en Línea</span>
+          <span className="font-bold text-brand-text-white text-[8px] uppercase tracking-widest sm:hidden">LIVE</span>
         </div>
         
-        <ApiCounter />
+        <div className="flex items-center space-x-2 md:space-x-3 px-2 md:px-4 py-1 rounded-full border border-brand-border/30 text-[8px] md:text-[9px] font-black font-mono bg-brand-bg-primary/50 grayscale">
+          <div className="flex items-center space-x-1.5 md:space-x-2">
+             <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
+             <span className="uppercase tracking-[0.2em] text-brand-text-muted">Conectado</span>
+          </div>
+        </div>
         
         <div className="items-center gap-4 hidden lg:flex">
-          <span className="font-mono text-brand-green text-[10px] font-bold">LATENCY: 24ms</span>
-          <div className="h-1.5 w-1.5 rounded-full bg-brand-green animate-ping"></div>
+          <div className="h-1 w-1 rounded-full bg-brand-green animate-pulse"></div>
         </div>
       </div>
 
@@ -279,7 +283,7 @@ function App() {
         <NavItem id="leagues" icon={Globe} label="Ligas" />
         <NavItem id="tv" icon={Monitor} label="TV" />
 
-        <div className="hidden md:flex mt-auto pt-6 border-t border-brand-border w-full flex-col items-center">
+        <div className="hidden md:flex mt-auto pt-6 border-t border-brand-border w-full flex-col items-center opacity-0 pointer-events-none">
           <button 
             onClick={() => setShowDiagnostic(true)}
             className="flex flex-col items-center justify-center p-4 text-brand-text-muted hover:text-brand-green transition-all group"

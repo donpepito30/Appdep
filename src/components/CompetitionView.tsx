@@ -181,7 +181,7 @@ export function CompetitionView() {
       </div>
 
       {/* Standings Table */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 touch-scroll pb-24 h-full">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32">
         <AnimatePresence mode="wait">
           {selectedLeague && (
             <motion.div
@@ -225,7 +225,7 @@ export function CompetitionView() {
                     </div>
                   )}
 
-                  <div className="flex items-center space-x-3 glass-card px-4 py-2.5 rounded-xl border border-brand-border/30">
+                  <div className="flex items-center space-x-3 glass-card px-4 py-2.5 rounded-xl border border-brand-border/30 invisible">
                     <div className="text-right">
                       <p className="text-[8px] text-brand-text-muted uppercase font-black tracking-[0.2em]">Live Status</p>
                       <p className="text-[10px] text-brand-green font-black uppercase tracking-widest">Active</p>
@@ -235,7 +235,7 @@ export function CompetitionView() {
                 </div>
               </div>
 
-               <div className="glass-card rounded-[2rem] border border-brand-border overflow-hidden shadow-2xl relative min-h-[400px]">
+               <div className="glass-card rounded-[2rem] border border-brand-border shadow-2xl relative min-h-[400px]">
                  {loadingStandings ? (
                    <div className="p-1 space-y-1">
                      {[...Array(10)].map((_, i) => (
@@ -244,23 +244,23 @@ export function CompetitionView() {
                    </div>
                  ) : (
                    <>
-                     <div className="hidden md:block">
-                       <div className="tabla-wrapper">
-                         <table className="w-full text-left min-w-[600px]">
-                         <thead>
-                           <tr className="text-[10px] text-brand-text-muted uppercase font-black tracking-[0.2em] border-b border-brand-border bg-brand-bg-primary/80 italic">
-                         <th className="p-4 w-16 text-center">#</th>
-                         <th className="p-4">Squad / Organization</th>
-                         <th className="p-4 text-center">GP</th>
-                         <th className="p-4 text-center">W</th>
-                         <th className="p-4 text-center">D</th>
-                         <th className="p-4 text-center">L</th>
-                         <th className="p-4 text-center hidden md:table-cell">GF</th>
-                         <th className="p-4 text-center hidden md:table-cell">GA</th>
-                         <th className="p-4 text-center">PTS</th>
-                         <th className="p-4 text-center">Last 5 Form</th>
-                       </tr>
-                     </thead>
+                      <div className="hidden md:block">
+                        <div className="tabla-wrapper">
+                          <table className="w-full text-left min-w-[600px]">
+                            <thead>
+                              <tr className="text-[10px] text-brand-text-muted uppercase font-black tracking-[0.2em] border-b border-brand-border bg-brand-bg-primary/80 italic">
+                                <th className="p-4 w-16 text-center">Pos</th>
+                                <th className="p-4">Equipo</th>
+                                <th className="p-4 text-center">PJ</th>
+                                <th className="p-4 text-center">V</th>
+                                <th className="p-4 text-center">E</th>
+                                <th className="p-4 text-center">D</th>
+                                <th className="p-4 text-center hidden md:table-cell">GF</th>
+                                <th className="p-4 text-center hidden md:table-cell">GC</th>
+                                <th className="p-4 text-center">PTS</th>
+                                <th className="p-4 text-center">Forma</th>
+                              </tr>
+                            </thead>
                     <tbody className="text-sm">
                       {standings?.length === 0 ? (
                         <tr>

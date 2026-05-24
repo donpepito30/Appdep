@@ -15,7 +15,7 @@ export function TVGuideView() {
 
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [activeTab, countryFilter]);
 
   const loadData = async () => {
     setLoading(true);
@@ -56,7 +56,7 @@ export function TVGuideView() {
             <h2 className="text-3xl font-black italic tracking-tighter text-brand-text-white uppercase leading-none">
               GUÍA DE <span className="text-brand-green">TRANSMISIÓN</span>
             </h2>
-            <p className="text-brand-text-muted text-[10px] uppercase font-bold tracking-[0.3em] mt-2">Derechos de emisión y canales con licencia v2</p>
+            <p className="text-brand-text-muted text-[10px] uppercase font-bold tracking-[0.3em] mt-2">Cobertura oficial y canales autorizados</p>
           </div>
 
           <div className="flex bg-brand-bg-card p-1 rounded-2xl border border-brand-border/30">
@@ -127,7 +127,7 @@ export function TVGuideView() {
               className="h-64 flex flex-col items-center justify-center space-y-4"
             >
               <div className="w-12 h-12 border-t-2 border-brand-green rounded-full animate-spin" />
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-text-muted">Escaneando transpondedores...</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-text-muted">Buscando señales...</p>
             </motion.div>
           ) : activeTab === 'channels' ? (
             <motion.div 
@@ -145,7 +145,7 @@ export function TVGuideView() {
                     <div className="px-3 py-1 bg-white/5 rounded-full text-[9px] font-black text-brand-text-muted uppercase tracking-widest">{channel.country_code}</div>
                   </div>
                   <h3 className="text-lg font-black text-brand-text-white uppercase tracking-tight mb-1">{channel.name}</h3>
-                  <p className="text-[10px] text-brand-text-muted font-medium mb-4 uppercase tracking-tighter">ID: BSD-CH-{channel.id.toString().padStart(3, '0')}</p>
+                  <p className="text-[10px] text-brand-text-muted font-medium mb-4 uppercase tracking-tighter">Señal disponible</p>
                   
                   {channel.link ? (
                     <a 
