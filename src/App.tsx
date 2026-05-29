@@ -283,13 +283,14 @@ function App() {
         <NavItem id="leagues" icon={Globe} label="Ligas" />
         <NavItem id="tv" icon={Monitor} label="TV" />
 
-        <div className="hidden md:flex mt-auto pt-6 border-t border-brand-border w-full flex-col items-center opacity-0 pointer-events-none">
+        <div className="flex flex-col items-center mt-auto w-full border-t border-brand-border/30 pt-4">
           <button 
             onClick={() => setShowDiagnostic(true)}
-            className="flex flex-col items-center justify-center p-4 text-brand-text-muted hover:text-brand-green transition-all group"
-            title="Diagnóstico"
+            className="flex flex-col items-center justify-center p-4 text-brand-text-muted hover:text-brand-green transition-all group w-full"
+            title="Soporte y API"
           >
-            <ShieldCheck className="w-6 h-6 group-hover:scale-110" />
+            <ShieldCheck className="w-5 h-5 group-hover:scale-110 mb-1" />
+            <span className="text-[7px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Soporte</span>
           </button>
         </div>
       </nav>
