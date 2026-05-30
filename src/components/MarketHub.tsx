@@ -20,7 +20,12 @@ export function MarketHub() {
               tab === 'players' ? "bg-brand-green text-black" : "text-brand-text-muted hover:text-brand-text-white"
             )}
           >
-            <Users className="w-5 h-5" />
+            <div className={cn(
+              "custom-icon-wrapper scale-75",
+              tab === 'players' ? "bg-black/20 border-black/10" : ""
+            )}>
+              <Users className="w-5 h-5" />
+            </div>
             <span>Top Jugadores</span>
           </button>
           <button
@@ -30,7 +35,12 @@ export function MarketHub() {
               tab === 'managers' ? "bg-brand-green text-black" : "text-brand-text-muted hover:text-brand-text-white"
             )}
           >
-            <BarChart3 className="w-5 h-5" />
+            <div className={cn(
+              "custom-icon-wrapper scale-75",
+              tab === 'managers' ? "bg-black/20 border-black/10" : ""
+            )}>
+              <BarChart3 className="w-5 h-5" />
+            </div>
             <span>Top Mánagers</span>
           </button>
         </div>

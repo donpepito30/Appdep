@@ -181,7 +181,7 @@ export function CompetitionView() {
       </div>
 
       {/* Standings Table */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 modern-scroll">
         <AnimatePresence mode="wait">
           {selectedLeague && (
             <motion.div
@@ -245,8 +245,8 @@ export function CompetitionView() {
                  ) : (
                    <>
                       <div className="hidden md:block">
-                        <div className="tabla-wrapper">
-                          <table className="w-full text-left min-w-[600px]">
+                        <div className="tabla-wrapper overflow-x-auto modern-scroll">
+                          <table className="w-full text-left min-w-[700px]">
                             <thead>
                               <tr className="text-[10px] text-brand-text-muted uppercase font-black tracking-[0.2em] border-b border-brand-border bg-brand-bg-primary/80 italic">
                                 <th className="p-4 w-16 text-center">Pos</th>

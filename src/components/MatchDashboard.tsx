@@ -59,7 +59,7 @@ interface AdvancedStats {
   duelsWonPercent: number;
 }
 
-type DashboardTab = 'summary' | 'predictions' | 'strategy' | 'stats' | 'incidents' | 'lineups' | 'ai' | 'h2h' | 'social' | 'broadcasts' | 'shotmap';
+type DashboardTab = 'summary' | 'predictions' | 'stats' | 'h2h' | 'lineups' | 'shotmap';
 
 export function MatchDashboard({ match, stats, prediction, odds, incidents, momentum, lastStats, metadata, lineups, playerStats, syncMatchDetail }: DashboardProps) {
   const [activeTab, setActiveTab] = React.useState<DashboardTab>('summary');
@@ -77,8 +77,8 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
     const performSync = () => {
       syncMatchDetail(match.id, {
         stats: true, // Siempre sincronizamos stats si estamos viendo el panel
-        slow: activeTab === 'summary' || activeTab === 'lineups' || activeTab === 'stats' || activeTab === 'ai',
-        forms: activeTab === 'predictions' || activeTab === 'strategy' || activeTab === 'ai'
+        slow: activeTab === 'summary' || activeTab === 'lineups' || activeTab === 'stats',
+        forms: activeTab === 'predictions' || activeTab === 'h2h'
       });
     };
 
@@ -107,7 +107,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
 
   useEffect(() => {
     // Load H2H if we are on H2H history or Strategy tab
-    if ((activeTab === 'h2h' || activeTab === 'strategy') && h2hHistory.length === 0 && !loadingH2H) {
+    if (activeTab === 'h2h' && h2hHistory.length === 0 && !loadingH2H) {
       setLoadingH2H(true);
       const h2hId1 = match.homeTeamId || match.homeTeam;
       const h2hId2 = match.awayTeamId || match.awayTeam;
@@ -120,8 +120,8 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
       });
     }
 
-    // Load Advanced Stats if we are on Analysis or Strategy tab
-    if ((activeTab === 'stats' || activeTab === 'strategy' || activeTab === 'ai') && !homeAdvancedStats && match.homeTeamId && match.awayTeamId && !loadingAdvanced) {
+    // Load Advanced Stats if we are on Analysis tab
+    if (activeTab === 'stats' && !homeAdvancedStats && match.homeTeamId && match.awayTeamId && !loadingAdvanced) {
       setLoadingAdvanced(true);
       
       const calculateStats = (fixtures: any[], teamId: string): AdvancedStats => {
@@ -192,8 +192,8 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
       });
     }
 
-    // Independent AI Preview generation ONLY when AI tab is selected
-    if (activeTab === 'ai' && !aiPreview && !isGeneratingAI && match.homeTeamId && match.awayTeamId) {
+    // Independent AI Preview generation ONLY when Summary tab is selected (if meta preview is missing)
+    if (activeTab === 'summary' && !metadata?.ai_preview && !aiPreview && !isGeneratingAI && match.homeTeamId && match.awayTeamId) {
        setIsGeneratingAI(true);
        
        Promise.all([
@@ -245,88 +245,109 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
   };
 
   return (
-    <div ref={dashboardRef} className="flex-1 flex flex-col bg-brand-bg-primary min-h-0 min-w-0 w-full overflow-hidden">
+    <div ref={dashboardRef} className="flex-1 flex flex-col bg-brand-bg-primary min-h-0 min-w-0 w-full overflow-hidden font-sans">
       {/* Persistent Match Header */}
-      <div className="bg-brand-bg-card border-b border-brand-border/30 px-4 py-4 md:px-6 md:py-6 relative z-50 shrink-0 w-full overflow-hidden">
-        <div className="flex items-center justify-between max-w-5xl mx-auto gap-4">
-          <div className="flex-1 flex items-center space-x-3 md:space-x-6 min-w-0">
-            <div className="shrink-0 flex items-center cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: match.homeLogo, leagueId: match.leagueId }); }}>
-              <TeamLogo name={match.homeTeam} logoUrl={match.homeLogo} size="md" className="w-10 h-10 sm:w-12 sm:h-12 md:w-20 md:h-20 hover:scale-110 transition-transform" />
+      <div className="bg-brand-bg-card/80 backdrop-blur-md border-b border-white/5 px-4 md:px-6 py-4 md:py-8 relative z-50 shrink-0 w-full overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
+        <div className="flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-3 md:gap-8 relative z-10 w-full">
+          {/* Team Home */}
+          <div className="w-full md:flex-1 flex items-center md:space-x-4 lg:space-x-6 min-w-0 order-2 md:order-1">
+            <div className="shrink-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: match.homeLogo, leagueId: match.leagueId }); }}>
+              <div className="w-16 h-16 xs:w-20 xs:h-20 md:w-20 md:h-20 lg:w-24 lg:h-24 bg-black/40 rounded-xl md:rounded-[2rem] p-1.5 md:p-3 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
+                <TeamLogo name={match.homeTeam} logoUrl={match.homeLogo} size="lg" className="w-full h-full object-contain" />
+              </div>
             </div>
-            <div className="flex flex-col min-w-0 notranslate cursor-pointer" translate="no" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: match.homeLogo, leagueId: match.leagueId }); }}>
-              <h2 className="text-[11px] sm:text-sm md:text-xl font-bold tracking-tight text-brand-text-white truncate hover:text-brand-green transition-colors">{match.homeTeam}</h2>
-              <span className="text-[7px] md:text-[10px] text-brand-green uppercase font-black tracking-widest truncate">{match.leagueName || 'PARTIDO EN VIVO'}</span>
+            <div className="flex flex-col min-w-0 ml-2.5 md:ml-0 notranslate" translate="no">
+              <h2 className="text-xs xs:text-base md:text-xl lg:text-3xl font-display font-black tracking-tighter text-brand-text-white truncate uppercase leading-none mb-1 md:mb-2">{match.homeTeam}</h2>
+              <div className="flex items-center gap-1.5 md:gap-2">
+                 <div className="h-2.5 md:h-3 w-[2px] bg-brand-green" />
+                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] truncate">{match.leagueName || 'Match Intel'}</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col items-center shrink-0">
-            <div className="flex items-center space-x-4 md:space-x-8">
-              <div className="text-2xl md:text-5xl font-black font-display font-tabular tracking-tighter text-brand-text-white whitespace-nowrap">
-                {match.homeScore} - {match.awayScore}
+          {/* Score & Meta */}
+          <div className="flex flex-col items-center shrink-0 order-1 md:order-2 mb-1 md:mb-0">
+            <div className="flex items-center gap-4 md:gap-6 lg:gap-10">
+              <div className="text-2xl xs:text-4xl md:text-6xl lg:text-7xl font-black font-display font-tabular tracking-tighter text-brand-text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                {match.homeScore} <span className="text-white/10 mx-[-4px]">:</span> {match.awayScore}
               </div>
             </div>
             {match.status === 'LIVE' && (
-              <div className="flex items-center mt-1 space-x-1.5 md:space-x-2">
-                <span className="flex h-1.5 w-1.5 relative">
+              <div className="flex items-center mt-1 md:mt-3 px-2 md:px-3 py-0.5 md:py-1 bg-brand-red/10 rounded-full border border-brand-red/20">
+                <span className="relative flex h-1 w-1 md:h-2 md:w-2 mr-1 md:mr-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-red"></span>
+                  <span className="relative inline-flex rounded-full h-full w-full bg-brand-red"></span>
                 </span>
-                <span className="text-[10px] md:text-xs font-mono font-bold text-brand-red">{match.currentMinute}'<span className="animate-pulse"></span></span>
+                <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] font-mono font-black text-brand-red uppercase tracking-widest">{match.currentMinute}' <span className="hidden sm:inline">EN VIVO</span></span>
               </div>
             )}
             {match.status === 'FINISHED' && (
-              <span className="text-[8px] md:text-[9px] uppercase font-black text-brand-text-muted mt-1 tracking-[0.2em]">Finalizado</span>
+              <div className="mt-1 md:mt-3 px-2 md:px-3 py-0.5 md:py-1 bg-white/5 rounded-full border border-white/10">
+                <span className="text-[7px] xs:text-[8px] md:text-[10px] uppercase font-black text-brand-text-muted tracking-[0.2em]">Finalizado</span>
+              </div>
             )}
           </div>
 
-          <div className="flex-1 flex items-center justify-end space-x-3 md:space-x-6 min-w-0 notranslate" translate="no">
-            <div className="flex flex-col items-end min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId }); }}>
-              <h2 className="text-[11px] sm:text-sm md:text-xl font-bold tracking-tight text-brand-text-white text-right truncate hover:text-brand-green transition-colors">{match.awayTeam}</h2>
-              <span className="text-[7px] md:text-[10px] text-brand-text-muted uppercase font-bold tracking-widest truncate">VISITA</span>
+          {/* Team Away */}
+          <div className="w-full md:flex-1 flex items-center justify-end md:space-x-4 lg:space-x-6 min-w-0 order-3">
+            <div className="flex flex-col items-end min-w-0 mr-2.5 md:mr-0 notranslate" translate="no">
+              <h2 className="text-xs xs:text-base md:text-xl lg:text-3xl font-display font-black tracking-tighter text-brand-text-white text-right truncate uppercase leading-none mb-1 md:mb-2">{match.awayTeam}</h2>
+              <div className="flex items-center gap-1.5 md:gap-2">
+                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] truncate">Visita</span>
+                 <div className="h-2.5 md:h-3 w-[2px] bg-brand-text-muted/30" />
+              </div>
             </div>
-            <div className="shrink-0 flex items-center cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId }); }}>
-              <TeamLogo name={match.awayTeam} logoUrl={match.awayLogo} size="md" className="w-10 h-10 sm:w-12 sm:h-12 md:w-20 md:h-20 hover:scale-110 transition-transform" />
+            <div className="shrink-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId }); }}>
+              <div className="w-16 h-16 xs:w-20 xs:h-20 md:w-20 md:h-20 lg:w-24 lg:h-24 bg-black/40 rounded-xl md:rounded-[2rem] p-1.5 md:p-3 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
+                <TeamLogo name={match.awayTeam} logoUrl={match.awayLogo} size="lg" className="w-full h-full object-contain" />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Unified Tab Navigation */}
       <div 
         role="tablist"
-        aria-label="Panel de análisis del partido"
-        className="flex w-full bg-brand-bg-card/50 border-b border-brand-border/30 shrink-0 touch-scroll-x scrollbar-hide overflow-x-auto"
+        aria-label="Match analysis navigation"
+        className="flex w-full bg-brand-bg-card/30 border-b border-white/5 shrink-0 touch-scroll-x scrollbar-hide overflow-x-auto"
       >
-        {[
-          { id: 'summary', label: 'Resumen', icon: Activity },
-          { id: 'predictions', label: 'Predicciones', icon: Zap },
-          { id: 'h2h', label: 'Historial', icon: Swords },
-          { id: 'strategy', label: 'Estrategia', icon: Target },
-          { id: 'stats', label: 'Análisis', icon: BarChart3 },
-          { id: 'incidents', label: 'Incidentes', icon: History },
-          { id: 'lineups', label: 'Alineaciones', icon: Users },
-          { id: 'ai', label: 'Insights', icon: Sparkles },
-          { id: 'social', label: 'Social', icon: MessageSquare },
-          { id: 'broadcasts', label: 'TV', icon: Tv },
-          { id: 'shotmap', label: 'Tiros', icon: Crosshair }
-        ].map(t => (
-            <button
-            key={t.id}
-            role="tab"
-            aria-selected={activeTab === t.id}
-            onClick={() => setActiveTab(t.id as DashboardTab)}
-            className={cn(
-              "shrink-0 md:flex-1 flex items-center justify-center space-x-2 py-4 px-5 md:px-4 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap min-w-[64px] md:min-w-0 portrait:min-w-[72px]",
-              activeTab === t.id 
-                ? "border-brand-green text-brand-green bg-brand-green/5" 
-                : "border-transparent text-brand-text-muted hover:text-brand-text-white hover:bg-white/5"
-            )}
-          >
-            <t.icon className="w-5 h-5" />
-            <span className="hidden md:inline">{t.label}</span>
-          </button>
-        ))}
+        <div className="flex flex-nowrap min-w-max md:min-w-0 md:justify-center w-full px-4">
+          {[
+            { id: 'summary', label: 'Dashboard', icon: Activity },
+            { id: 'predictions', label: 'Predictions', icon: Zap },
+            { id: 'h2h', label: 'History', icon: Swords },
+            { id: 'stats', label: 'Analytical', icon: BarChart3 },
+            { id: 'lineups', label: 'Lineups', icon: Users },
+            { id: 'shotmap', label: 'Shot Map', icon: Crosshair }
+          ].map(t => (
+              <button
+              key={t.id}
+              role="tab"
+              aria-selected={activeTab === t.id}
+              onClick={() => setActiveTab(t.id as DashboardTab)}
+              className={cn(
+                "shrink-0 flex items-center justify-center space-x-1.5 md:space-x-3 py-3 md:py-6 px-3.5 md:px-8 text-[8px] md:text-[11px] font-black uppercase tracking-[0.05em] md:tracking-[0.2em] transition-all relative border-b-2",
+                activeTab === t.id 
+                  ? "border-brand-green text-white bg-brand-green/5" 
+                  : "border-transparent text-brand-text-muted hover:text-brand-text-white hover:bg-white/5"
+              )}
+            >
+              <div className={cn(
+                "custom-icon-wrapper scale-[0.65] md:scale-90",
+                activeTab === t.id ? "bg-brand-green/20 border-brand-green/30 shadow-[0_0_15px_rgba(0,255,136,0.2)]" : ""
+              )}>
+                <t.icon className={cn("w-3 md:w-4 h-3 md:h-4", activeTab === t.id ? "text-brand-green" : "text-brand-text-muted")} />
+              </div>
+              <span className="whitespace-nowrap">{t.label}</span>
+              {activeTab === t.id && (
+                 <motion.div layoutId="activeTabGlow" className="absolute inset-0 bg-brand-green/10 blur-xl -z-10" />
+              )}
+            </button>
+          ))}
+        </div>
       </div>
+
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-12 scroll-smooth touch-scroll">
         <AnimatePresence mode="wait">
@@ -338,12 +359,6 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
             transition={{ duration: 0.2 }}
             className="space-y-6 pb-20 md:pb-12"
           >
-            {activeTab === 'social' && (
-              <SocialTab eventId={match.id} />
-            )}
-            {activeTab === 'broadcasts' && (
-              <BroadcastsTab eventId={match.id} />
-            )}
             {activeTab === 'shotmap' && (
               <ShotmapTab eventId={match.id} />
             )}
@@ -362,7 +377,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                 ) : (
                   <div className="space-y-8">
                     {/* H2H Summary Metrics */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                        {/* W/D/L Ratio */}
                        {(() => {
                          const h2hStats = h2hHistory.reduce((acc, curr) => {
@@ -391,7 +406,10 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                            <>
                              <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl space-y-4">
                                <h4 className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.2em] flex items-center gap-2">
-                                 <Target className="w-4 h-4 text-brand-green" /> Distribución Geográfica
+                                 <div className="custom-icon-wrapper w-8 h-8 scale-75">
+                                   <Target className="w-4 h-4 text-brand-green" />
+                                 </div>
+                                 Distribución Geográfica
                                </h4>
                                <div className="flex justify-between items-end h-24 gap-2">
                                  <div className="flex-1 flex flex-col items-center gap-1">
@@ -414,7 +432,10 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
 
                              <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl space-y-4">
                                 <h4 className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.2em] flex items-center gap-2">
-                                  <Zap className="w-4 h-4 text-brand-yellow" /> Promedio de Goles
+                                  <div className="custom-icon-wrapper w-8 h-8 scale-75">
+                                    <Zap className="w-4 h-4 text-brand-yellow" />
+                                  </div>
+                                  Promedio de Goles
                                 </h4>
                                 <div className="space-y-4 py-2">
                                    <div className="flex justify-between items-center text-center">
@@ -437,7 +458,10 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
 
                              <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl flex flex-col justify-between">
                                 <h4 className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.2em] flex items-center gap-2">
-                                  <Activity className="w-4 h-4 text-brand-blue" /> Estado de Forma Mutual
+                                  <div className="custom-icon-wrapper w-8 h-8 scale-75">
+                                    <Activity className="w-4 h-4 text-brand-blue" />
+                                  </div>
+                                  Estado de Forma Mutual
                                 </h4>
                                 <div className="flex justify-center items-center py-4">
                                    <div className="flex gap-2">
@@ -506,478 +530,494 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
             )}
 
             {activeTab === 'predictions' && (
-              <div className="space-y-8">
+              <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 {!prediction ? (
-                  <div className="glass-card p-10 md:p-12 rounded-[2rem] border border-brand-border/40 text-center space-y-6">
-                    <div className="relative flex justify-center">
-                      <Zap className="w-12 h-12 text-brand-green animate-pulse" />
-                      <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-brand-green/40 opacity-50" />
-                    </div>
-                    <p className="text-brand-text-muted italic uppercase text-[10px] font-black tracking-[0.3em] animate-pulse">Analizando variables tácticas...</p>
+                  <div className="glass-card p-16 rounded-[3rem] border border-white/5 text-center space-y-8">
+                     <Zap className="w-16 h-16 text-brand-yellow animate-pulse mx-auto opacity-50" />
+                     <p className="text-brand-text-muted uppercase text-[12px] font-black tracking-[0.4em]">Calculando Probabilidades IA</p>
                   </div>
                 ) : (
-                  <div className="space-y-10">
-                    {/* Best Opportunity Section */}
-                    {(() => {
-                      const markets = [
-                        { label: 'Local (1)', prob: prediction.homeWinProb, odd: odds?.home_win },
-                        { label: 'Empate (X)', prob: prediction.drawProb, odd: odds?.draw },
-                        { label: 'Visita (2)', prob: prediction.awayWinProb, odd: odds?.away_win },
-                        { label: 'BTTS (Sí)', prob: prediction.bttsProb || 0, odd: odds?.btts_yes },
-                        { label: 'Over 1.5', prob: prediction.over15Prob || 0, odd: odds?.over_15_goals },
-                        { label: 'Over 2.5', prob: prediction.over25Prob || 0, odd: odds?.over_25_goals },
-                        { label: 'Over 3.5', prob: prediction.over35Prob || 0, odd: odds?.over_35_goals },
-                      ].filter(m => m.odd && m.prob > 0);
-
-                      const best = markets.reduce((prev, curr) => {
-                        const prevValue = prev.odd ? ((prev.prob - (1 / prev.odd)) / (1 / prev.odd)) : -999;
-                        const currValue = curr.odd ? ((curr.prob - (1 / curr.odd)) / (1 / curr.odd)) : -999;
-                        return currValue > prevValue ? curr : prev;
-                      }, markets[0]);
-
-                      if (!best || !best.odd) return null;
-
-                      const bestValue = ((best.prob - (1 / best.odd)) / (1 / best.odd)) * 100;
-
-                      return (
-                        <div className="glass-card p-6 md:p-8 rounded-[2rem] border-2 border-brand-green/30 bg-brand-green/5 relative overflow-hidden group">
-                          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/10 blur-[80px] -mr-32 -mt-32 group-hover:bg-brand-green/20 transition-all duration-700" />
-                          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                            <div className="space-y-3 text-center md:text-left">
-                              <div className="flex items-center justify-center md:justify-start gap-2 text-brand-green">
-                                <Sparkles className="w-5 h-5 animate-pulse" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.4em]">Sugerencia</span>
-                              </div>
-                              <h3 className="text-2xl md:text-5xl font-display font-black text-brand-text-white uppercase tracking-tighter">
-                                {best.label} <span className="text-brand-green">@{best.odd.toFixed(2)}</span>
-                              </h3>
-                              <p className="text-[11px] text-brand-text-muted font-medium max-w-md">
-                                Basado en la probabilidad detectada vs cuota actual.
-                              </p>
+                  <div className="space-y-12">
+                    {/* Hero Best Bet / Value Pick */}
+                    {prediction.valueAnalysis?.isValue ? (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="relative overflow-hidden group"
+                      >
+                         <div className="absolute inset-0 bg-gradient-to-r from-brand-green/20 via-brand-bg-card to-brand-green/10 rounded-[3rem] blur-3xl opacity-30 -z-10 group-hover:opacity-50 transition-all duration-1000" />
+                         <div className="premium-gradient border-2 border-brand-green/30 p-10 md:p-14 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-12 opacity-5 scale-150 rotate-12">
+                               <TrendingUp className="w-48 h-48 text-brand-green" />
                             </div>
-                            <div className="flex items-center gap-6">
-                              <div className="text-right">
-                                <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-1">Precisión</div>
-                                <div className="text-4xl font-mono font-black text-brand-green">{(best.prob * 100).toFixed(0)}%</div>
-                              </div>
-                              <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-brand-green flex items-center justify-center shadow-[0_0_30px_rgba(34,197,94,0.4)] transition-transform">
-                                <TrendingUp className="w-8 h-8 md:w-10 md:h-10 text-black" />
-                              </div>
+                            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
+                               <div className="space-y-6 text-center md:text-left flex-1">
+                                  <div className="flex items-center justify-center md:justify-start gap-4">
+                                     <div className="px-4 py-1.5 bg-brand-green text-black text-[10px] font-black uppercase tracking-[0.3em] rounded-full shadow-lg">Value Discovery</div>
+                                     <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.2em]">{prediction.valueAnalysis.percentage?.toFixed(1) || '0.0'}% ADVANTAGE</span>
+                                  </div>
+                                  <div>
+                                     <h3 className="text-5xl md:text-7xl font-display font-black text-brand-text-white uppercase tracking-tighter leading-none mb-4">
+                                        {prediction.valueAnalysis.market}
+                                     </h3>
+                                     <div className="inline-flex items-center gap-3 bg-black/40 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/10">
+                                        <span className="text-2xl font-mono font-black text-brand-green">@{prediction.valueAnalysis.odds?.toFixed(2)}</span>
+                                        <div className="h-4 w-px bg-white/10" />
+                                        <span className="text-sm font-black text-white/40 uppercase tracking-widest">Market Value</span>
+                                     </div>
+                                  </div>
+                               </div>
+                               <div className="shrink-0 flex flex-col items-center justify-center">
+                                  <div className="relative">
+                                     <svg className="w-32 h-32 md:w-44 md:h-44 transform -rotate-90">
+                                       <circle cx="50%" cy="50%" r="45%" className="stroke-white/5 fill-none" strokeWidth="8" />
+                                       <motion.circle 
+                                          cx="50%" cy="50%" r="45%" 
+                                          className="stroke-brand-green fill-none" 
+                                          strokeWidth="8" 
+                                          strokeDasharray="283"
+                                          initial={{ strokeDashoffset: 283 }}
+                                          animate={{ strokeDashoffset: 283 - (283 * (prediction.valueAnalysis.probability || 0.6)) }}
+                                          transition={{ duration: 2, ease: "easeOut" }}
+                                          strokeLinecap="round"
+                                       />
+                                     </svg>
+                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                        <span className="text-4xl md:text-5xl font-display font-black text-brand-text-white leading-none">
+                                           {((prediction.valueAnalysis.probability || 0.6) * 100).toFixed(0)}%
+                                        </span>
+                                        <span className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest mt-1">Trust Score</span>
+                                     </div>
+                                  </div>
+                               </div>
                             </div>
+                         </div>
+                      </motion.div>
+                    ) : (
+                        (() => {
+                        const markets = [
+                          { label: 'Victory Home', prob: prediction.homeWinProb, odd: odds?.home_win },
+                          { label: 'Draw Sequence', prob: prediction.drawProb, odd: odds?.draw },
+                          { label: 'Victory Away', prob: prediction.awayWinProb, odd: odds?.away_win },
+                          { label: 'Both to Score', prob: prediction.bttsProb || 0, odd: odds?.btts_yes },
+                          { label: 'High Scoring', prob: prediction.over25Prob || 0, odd: odds?.over_25_goals },
+                        ].filter(m => m.odd && m.prob > 0);
+
+                        const best = markets.reduce((prev, curr) => {
+                          const prevValue = prev.odd ? ((prev.prob - (1 / prev.odd)) / (1 / prev.odd)) : -999;
+                          const currValue = curr.odd ? ((curr.prob - (1 / curr.odd)) / (1 / curr.odd)) : -999;
+                          return currValue > prevValue ? curr : prev;
+                        }, markets[0]);
+
+                        if (!best || !best.odd) return null;
+                        return (
+                          <div className="bg-brand-bg-card p-10 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden group transition-all hover:bg-brand-bg-card/80">
+                             <div className="absolute top-0 right-0 w-96 h-96 bg-brand-green/5 blur-[120px] -mr-48 -mt-48 pointer-events-none" />
+                             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                                <div className="space-y-4 text-center md:text-left">
+                                   <div className="flex items-center justify-center md:justify-start gap-3">
+                                      <Sparkles className="w-5 h-5 text-brand-green animate-pulse" />
+                                      <span className="text-[11px] font-black uppercase tracking-[0.4em] text-brand-green/80">Premium Algorithmic Pick</span>
+                                   </div>
+                                   <h3 className="text-4xl md:text-6xl font-display font-black text-brand-text-white uppercase tracking-tighter">
+                                      {best.label} <span className="text-brand-green">@{best.odd.toFixed(2)}</span>
+                                   </h3>
+                                </div>
+                                <div className="flex items-center gap-10">
+                                   <div className="text-center">
+                                      <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-1">Impact Probability</div>
+                                      <div className="text-5xl font-display font-black text-brand-text-white tracking-tighter">{(best.prob * 100).toFixed(0)}%</div>
+                                   </div>
+                                   <div className="w-16 h-16 rounded-2xl bg-brand-green flex items-center justify-center shadow-lg shadow-brand-green/20">
+                                      <TrendingUp className="w-8 h-8 text-black" />
+                                   </div>
+                                </div>
+                             </div>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                        })()
+                    )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      {/* Probabilities Card (Special for 1X2) */}
-                      <div className="glass-card p-6 md:p-8 rounded-[2rem] border border-brand-border shadow-2xl relative overflow-hidden flex flex-col justify-between">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                          <h4 className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
-                            <Target className="w-5 h-5 text-brand-red shrink-0" /> 
-                            MERCADO: <span className="text-brand-text-white italic">RESULTADO FINAL (1X2)</span>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                      {/* Detailed 1X2 Probabilities */}
+                      <div className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden">
+                        <div className="flex flex-col gap-10">
+                          <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] flex items-center gap-3">
+                            <Target className="w-5 h-5 text-brand-red" /> Probability Matrix <span className="text-brand-text-white">1X2</span>
                           </h4>
-                        </div>
 
-                        <div className="space-y-10">
-                          <div className="flex justify-between items-center px-4">
+                          <div className="grid grid-cols-3 gap-12">
                              <div className="text-center group">
-                                <div className={cn("text-4xl font-black font-mono tracking-tighter transition-transform", prediction.homeWinProb >= 0.5 ? "text-brand-green" : "text-brand-text-white")}>{(prediction.homeWinProb * 100).toFixed(0)}%</div>
-                                <div className="text-[10px] font-black text-brand-text-muted uppercase mt-2 tracking-widest">LOCAL</div>
-                                {odds?.home_win && <div className="mt-1 text-[10px] font-mono font-bold text-brand-text-muted">@{odds.home_win.toFixed(2)}</div>}
+                                <div className={cn("text-5xl font-display font-black tracking-tighter transition-all group-hover:scale-110", prediction.homeWinProb >= 0.5 ? "text-brand-green" : "text-brand-text-white")}>{(prediction.homeWinProb * 100).toFixed(0)}%</div>
+                                <div className="text-[10px] font-black text-brand-text-muted uppercase mt-3 tracking-[0.2em]">{match.homeTeam}</div>
+                                {odds?.home_win && <div className="mt-3 text-[12px] font-mono font-black text-white/30 bg-white/5 py-1 px-3 rounded-full inline-block group-hover:text-brand-green transition-colors">@{odds.home_win.toFixed(2)}</div>}
                              </div>
-                             <div className="w-px h-16 bg-gradient-to-b from-transparent via-brand-border/50 to-transparent" />
                              <div className="text-center group">
-                                <div className={cn("text-4xl font-black font-mono tracking-tighter transition-transform", prediction.drawProb >= 0.5 ? "text-brand-green" : "text-brand-text-white")}>{(prediction.drawProb * 100).toFixed(0)}%</div>
-                                <div className="text-[10px] font-black text-brand-text-muted uppercase mt-2 tracking-widest">EMPATE</div>
-                                {odds?.draw && <div className="mt-1 text-[10px] font-mono font-bold text-brand-text-muted">@{odds.draw.toFixed(2)}</div>}
+                                <div className={cn("text-5xl font-display font-black tracking-tighter transition-all group-hover:scale-110", prediction.drawProb >= 0.5 ? "text-brand-green" : "text-brand-text-white")}>{(prediction.drawProb * 100).toFixed(0)}%</div>
+                                <div className="text-[10px] font-black text-brand-text-muted uppercase mt-3 tracking-[0.2em]">Draw</div>
+                                {odds?.draw && <div className="mt-3 text-[12px] font-mono font-black text-white/30 bg-white/5 py-1 px-3 rounded-full inline-block group-hover:text-brand-green transition-colors">@{odds.draw.toFixed(2)}</div>}
                              </div>
-                             <div className="w-px h-16 bg-gradient-to-b from-transparent via-brand-border/50 to-transparent" />
                              <div className="text-center group">
-                                <div className={cn("text-4xl font-black font-mono tracking-tighter transition-transform", prediction.awayWinProb >= 0.5 ? "text-brand-green" : "text-brand-text-white")}>{(prediction.awayWinProb * 100).toFixed(0)}%</div>
-                                <div className="text-[10px] font-black text-brand-text-muted uppercase mt-2 tracking-widest">VISITA</div>
-                                {odds?.away_win && <div className="mt-1 text-[10px] font-mono font-bold text-brand-text-muted">@{odds.away_win.toFixed(2)}</div>}
+                                <div className={cn("text-5xl font-display font-black tracking-tighter transition-all group-hover:scale-110", prediction.awayWinProb >= 0.5 ? "text-brand-green" : "text-brand-text-white")}>{(prediction.awayWinProb * 100).toFixed(0)}%</div>
+                                <div className="text-[10px] font-black text-brand-text-muted uppercase mt-3 tracking-[0.2em]">{match.awayTeam}</div>
+                                {odds?.away_win && <div className="mt-3 text-[12px] font-mono font-black text-white/30 bg-white/5 py-1 px-3 rounded-full inline-block group-hover:text-brand-green transition-colors">@{odds.away_win.toFixed(2)}</div>}
                              </div>
                           </div>
 
-                          <div className="flex h-4 bg-brand-bg-primary rounded-full overflow-hidden border border-white/5 p-0.5">
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.homeWinProb * 100}%` }} className="bg-brand-green h-full rounded-l-full" />
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.drawProb * 100}%` }} className="bg-brand-yellow h-full" />
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.awayWinProb * 100}%` }} className="bg-brand-red h-full rounded-r-full" />
+                          <div className="relative h-4 bg-white/5 rounded-full overflow-hidden p-1">
+                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.homeWinProb * 100}%` }} className="bg-brand-green h-full rounded-full mr-0.5" />
+                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.drawProb * 100}%` }} className="bg-brand-yellow h-full mr-0.5" />
+                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.awayWinProb * 100}%` }} className="bg-brand-red h-full rounded-full" />
                           </div>
                         </div>
                       </div>
 
-                      {/* Scoreline Prediction Card */}
-                      <div className="glass-card p-8 rounded-[2rem] border border-brand-border shadow-2xl relative overflow-hidden flex flex-col justify-center items-center text-center">
-                        <div className="absolute inset-0 bg-gradient-to-br from-brand-green/10 via-transparent to-brand-red/10 opacity-30" />
-                        <div className="relative z-10 space-y-6 w-full">
-                          <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] mb-4">Marcador</h4>
-                          <div className="flex items-center justify-center space-x-8">
-                             <TeamLogo name={match.homeTeam} size="sm" className="w-10 h-10 grayscale group-hover:grayscale-0 transition-all" />
-                             <div className="text-5xl md:text-6xl font-black font-display text-brand-text-white tracking-tighter bg-white/5 px-6 py-4 rounded-[2rem] border border-white/10 shadow-[inner_0_4px_20px_rgba(0,0,0,0.5)]">
+                      {/* Precise Scoreline Engine */}
+                      <div className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden flex flex-col justify-center items-center text-center group">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-brand-green/20 via-transparent to-brand-red/20 opacity-0 group-hover:opacity-10 transition-opacity duration-1000" />
+                        <div className="relative z-10 space-y-10 w-full">
+                          <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Precise Score Engine</h4>
+                          <div className="flex items-center justify-center gap-10">
+                             <div className="flex flex-col items-center gap-2">
+                                <TeamLogo name={match.homeTeam} logoUrl={match.homeLogo} size="md" className="w-16 h-16 grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" />
+                                <span className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">{match.homeTeam}</span>
+                             </div>
+                             <div className="text-7xl md:text-8xl font-display font-black text-brand-text-white tracking-tighter bg-gradient-to-b from-white/10 to-transparent px-10 py-6 rounded-[3rem] border border-white/10 shadow-2xl">
                                {(() => {
-                                 if (prediction?.scoreline && prediction.scoreline !== '?-?') {
-                                   return prediction.scoreline;
-                                 }
+                                 if (prediction?.scoreline && prediction.scoreline !== '?-?') return prediction.scoreline;
                                  if (match.status === 'LIVE') {
-                                   const projHome = (match.homeScore || 0) + Math.round((match.xgHome || 0.5) * 1.5);
-                                   const projAway = (match.awayScore || 0) + Math.round((match.xgAway || 0.5) * 1.5);
-                                   return `${projHome}-${projAway}`;
+                                    const projHome = (match.homeScore || 0) + Math.round((match.xgHome || 0.5) * 1.5);
+                                    const projAway = (match.awayScore || 0) + Math.round((match.xgAway || 0.5) * 1.5);
+                                    return `${projHome}:${projAway}`;
                                  }
                                  const homeGoals = Math.round((match.xgHome || 1.2) * 1.4);
                                  const awayGoals = Math.round((match.xgAway || 1.0) * 1.2);
-                                 return `${homeGoals}-${awayGoals}`;
+                                 return `${homeGoals}:${awayGoals}`;
                                })()}
                              </div>
-                             <TeamLogo name={match.awayTeam} size="sm" className="w-10 h-10 grayscale group-hover:grayscale-0 transition-all" />
+                             <div className="flex flex-col items-center gap-2">
+                                <TeamLogo name={match.awayTeam} logoUrl={match.awayLogo} size="md" className="w-16 h-16 grayscale opacity-40 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" />
+                                <span className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">{match.awayTeam}</span>
+                             </div>
                           </div>
-                          <div className="flex items-center justify-center gap-2">
-                             <Sparkles className="w-4 h-4 text-brand-green" />
-                             <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.2em]">ANÁLISIS COMPLETADO</span>
+                          <div className="flex items-center justify-center gap-3">
+                             <div className="h-4 w-4 rounded-full bg-brand-green/20 flex items-center justify-center">
+                                <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="w-1.5 h-1.5 bg-brand-green rounded-full" />
+                             </div>
+                             <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.3em]">Neural Prediction Engine Active</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Secondary Markets Grid */}
-                    <div className="space-y-6">
-                       <h4 className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.3em] flex items-center gap-3">
-                         <BarChart3 className="w-5 h-5 text-brand-blue" />
-                         Mercados de Goles y Ambos Marcan
-                       </h4>
-                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {/* Secondary Markets Breakdown */}
+                    <div className="space-y-8">
+                       <div className="flex items-center gap-4 px-2 text-brand-text-muted uppercase font-black text-[11px] tracking-[0.4em]">
+                          <div className="custom-icon-wrapper">
+                             <BarChart3 className="w-5 h-5 text-brand-blue" />
+                          </div>
+                          Focused Market Analysis
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                           <MarketPredictionCard 
-                            label="Ambos Equipos Marcan" 
+                            label="Both Teams to Score" 
                             prob={prediction.bttsProb || 0} 
                             odd={odds?.btts_yes} 
                             icon={Zap} 
                             reasoning={prediction.bttsReasoning}
                           />
-                          <MarketPredictionCard label="Over 1.5 Goles" prob={prediction.over15Prob || 0} odd={odds?.over_15_goals} icon={TrendingUp} />
+                          <MarketPredictionCard label="Over 1.5 Goals" prob={prediction.over15Prob || 0} odd={odds?.over_15_goals} icon={TrendingUp} />
                           <MarketPredictionCard label="Over 2.5 Goles" prob={prediction.over25Prob || 0} odd={odds?.over_25_goals} icon={TrendingUp} />
                           <MarketPredictionCard label="Over 3.5 Goles" prob={prediction.over35Prob || 0} odd={odds?.over_35_goals} icon={TrendingUp} />
                        </div>
                     </div>
-
-                    {/* Methodology Footer */}
-                    <div className="p-4 bg-brand-bg-primary/40 rounded-3xl border border-brand-border/10">
-                       <p className="text-[10px] text-brand-text-muted leading-relaxed italic text-center">
-                          Análisis basado en datos históricos y rendimiento actual para una toma de decisiones informada.
-                       </p>
-                    </div>
                   </div>
                 )}
               </div>
             )}
+
             {activeTab === 'summary' && (
-              <div className="space-y-6">
-                {/* Momentum Indicator Refined - Moved to top of summary */}
-                <div className="bg-brand-bg-card rounded-[2rem] p-6 border border-brand-border/40 relative overflow-hidden shadow-xl">
-                  <div className="absolute inset-0 bg-gradient-to-br from-brand-green/5 via-transparent to-brand-red/5 opacity-30" />
-                  <div className="relative z-10">
-                     <div className="flex justify-between items-center mb-3">
-                       <div className="flex flex-col">
-                         <span className="text-[9px] text-brand-text-muted font-bold uppercase tracking-widest">Presión Local</span>
-                         <div className="h-1 w-12 bg-brand-green/30 rounded-full mt-1" />
-                       </div>
-                       <div className="text-[10px] font-display font-black text-white/50 uppercase tracking-[0.3em]">Momentum Actual</div>
-                       <div className="flex flex-col items-end">
-                         <span className="text-[9px] text-brand-text-muted font-bold uppercase tracking-widest">Presión Visita</span>
-                         <div className="h-1 w-12 bg-brand-red/30 rounded-full mt-1" />
-                       </div>
-                     </div>
-                     
-                     <div className="relative h-3 bg-brand-bg-primary/50 rounded-full overflow-hidden border border-white/5 p-0.5">
-                        <div className="absolute inset-0 bg-gradient-to-r from-brand-red/20 via-transparent to-brand-green/20" />
+              <div className="space-y-10">
+                {/* Advanced Insight Section */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                   <div className="md:col-span-2 space-y-6">
+                      {(metadata?.ai_preview || aiPreview) && (
                         <motion.div 
-                          className="absolute top-0 w-2 h-full bg-white shadow-[0_0_20px_rgba(255,255,255,1)] z-10 rounded-full cursor-pointer"
-                          animate={{ left: `${50 + ((momentum || 0) * 50)}%` }}
-                          transition={{ type: 'spring', damping: 12, stiffness: 80 }}
-                        />
-                        <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-white/20 z-0" />
-                     </div>
-                  </div>
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="premium-gradient border border-white/5 p-8 rounded-[2.5rem] relative overflow-hidden group shadow-2xl"
+                        >
+                          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/10 blur-[80px] -mr-32 -mt-32" />
+                          <div className="relative z-10">
+                            <div className="flex items-center gap-3 mb-4">
+                               <div className="w-10 h-10 rounded-2xl bg-brand-green/20 flex items-center justify-center border border-brand-green/30">
+                                  <Sparkles className="w-5 h-5 text-brand-green" />
+                               </div>
+                               <span className="text-[12px] font-black uppercase tracking-[0.4em] text-brand-green">Strategist Intel</span>
+                            </div>
+                            <p className="text-xl md:text-2xl font-display font-medium text-brand-text-white leading-tight italic max-w-2xl">
+                              "{metadata?.ai_preview?.text || aiPreview}"
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* Performance Center */}
+                      <div className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-8">
+                         <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-display font-black uppercase tracking-widest text-brand-text-white flex items-center gap-2">
+                               <Activity className="w-5 h-5 text-brand-green" /> Performance Center
+                            </h3>
+                            <div className="text-[10px] font-mono text-brand-text-muted bg-white/5 px-2 py-1 rounded">V2.4 REALTIME</div>
+                         </div>
+
+                         <div className="grid grid-cols-3 gap-8">
+                            <div className="text-center group">
+                               <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-2 group-hover:text-brand-green transition-colors">xG Dominancia</div>
+                               <div className="text-4xl font-display font-black text-brand-text-white tracking-tighter">
+                                  {stats?.xgHome?.toFixed(2) || '0.00'}<span className="text-white/20 mx-1">:</span>{stats?.xgAway?.toFixed(2) || '0.00'}
+                               </div>
+                            </div>
+                            <div className="text-center group">
+                               <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-2 group-hover:text-brand-yellow transition-colors">Posesión</div>
+                               <div className="text-4xl font-display font-black text-brand-text-white tracking-tighter">
+                                  {stats?.possessionHome || 50}%
+                               </div>
+                            </div>
+                            <div className="text-center group">
+                               <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-2 group-hover:text-brand-blue transition-colors">Precisión</div>
+                               <div className="text-4xl font-display font-black text-brand-text-white tracking-tighter">
+                                  {stats?.accuratePassesHome || 82}%
+                               </div>
+                            </div>
+                         </div>
+
+                         <div className="space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
+                               <span className={cn(momentum > 0 && "text-brand-green")}>{match.homeTeam} Presión</span>
+                               <span className={cn(momentum < 0 && "text-brand-red")}>{match.awayTeam} Contra</span>
+                            </div>
+                            <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+                               <motion.div 
+                                 className="absolute top-0 bottom-0 w-2 bg-white shadow-[0_0_15px_#fff] z-10 rounded-full"
+                                 animate={{ left: `${50 + ((momentum || 0) * 50)}%` }}
+                                 transition={{ type: "spring", damping: 12 }}
+                               />
+                               <div className="absolute inset-0 bg-gradient-to-r from-brand-red/30 via-transparent to-brand-green/30" />
+                            </div>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Vertical Timeline / Momentum */}
+                   <div className="flex flex-col gap-6">
+                      <div className="bg-brand-bg-card p-8 rounded-[2.5rem] border border-white/5 shadow-2xl flex-1 flex flex-col items-center justify-center text-center overflow-hidden relative">
+                         <div className="absolute inset-0 opacity-10 flex items-center justify-center">
+                            <TrendingUp className="w-48 h-48 text-brand-green scale-150" />
+                         </div>
+                         <div className="relative z-10 space-y-4">
+                            <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Live Meta-Data</h4>
+                            <div className="space-y-6">
+                               <div>
+                                  <div className="text-5xl font-display font-black text-brand-green tracking-tighter">
+                                     {((stats?.xgHome || 0) > (stats?.xgAway || 0) ? (stats?.xgHome || 0) / (stats?.xgAway || 1) : (stats?.xgAway || 0) / (stats?.xgHome || 1)).toFixed(1)}x
+                                  </div>
+                                  <div className="text-[9px] font-bold text-brand-text-muted uppercase mt-1">Eficiencia de Ataque</div>
+                               </div>
+                               <div className="h-px w-12 bg-white/10 mx-auto" />
+                               <div>
+                                  <div className="text-4xl font-display font-black text-white/40 tracking-tighter">
+                                     {stats?.attacksHome || 0}<span className="mx-2">/</span>{stats?.attacksAway || 0}
+                                  </div>
+                                  <div className="text-[9px] font-bold text-brand-text-muted uppercase mt-1">Ataques Totales</div>
+                               </div>
+                            </div>
+                         </div>
+                      </div>
+                   </div>
                 </div>
 
-                {metadata?.ai_preview && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-brand-bg-card p-6 border-l-4 border-brand-green rounded-3xl relative overflow-hidden shadow-lg"
-                  >
-                    <div className="absolute top-2 right-4">
-                      <Sparkles className="w-5 h-5 text-brand-green animate-pulse" />
-                    </div>
-                    <h4 className="text-[10px] font-bold text-brand-green uppercase tracking-widest mb-3 flex items-center">
-                      Resumen del Encuentro
-                    </h4>
-                    <p className="text-sm text-brand-text-light leading-relaxed font-sans mt-2 whitespace-pre-wrap italic">
-                      {metadata.ai_preview.text}
-                    </p>
-                  </motion.div>
-                )}
-
-                {aiPreview && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-brand-bg-card p-6 border-l-4 border-brand-green rounded-3xl relative overflow-hidden shadow-lg"
-                  >
-                    <div className="absolute top-2 right-4">
-                      <Sparkles className="w-5 h-5 text-brand-green animate-pulse" />
-                    </div>
-                    <h4 className="text-[10px] font-bold text-brand-green uppercase tracking-widest mb-3 flex items-center">
-                      AI Preview Especial (Gemini 3 Flash)
-                    </h4>
-                    <p className="text-sm text-brand-text-light leading-relaxed font-sans mt-2 italic">
-                      {aiPreview}
-                    </p>
-                  </motion.div>
-                )}
-
-                {metadata?.funfacts && metadata.funfacts.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {metadata.funfacts.map((fact, i) => (
-                      <div key={i} className="bg-brand-bg-card/40 p-4 border border-brand-border/30 rounded-2xl flex items-start space-x-3">
-                        <div className="p-2 bg-brand-green/10 rounded-lg shrink-0">
-                          <Zap className="w-3.5 h-3.5 text-brand-green" />
-                        </div>
-                        <p className="text-xs text-brand-text-muted leading-snug">{fact.sentence}</p>
-                      </div>
-                    ))}
+                {/* Timeline Section */}
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between px-4">
+                    <h3 className="text-sm font-display font-black uppercase tracking-[0.3em] text-brand-text-white flex items-center gap-3">
+                       <Zap className="w-5 h-5 text-brand-yellow" /> Game Timeline
+                    </h3>
+                    <div className="h-px flex-1 bg-white/5 mx-6" />
                   </div>
-                )}
-
-                {(metadata?.venue || metadata?.managers) && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {metadata.venue && (
-                      <div className="md:col-span-1 bg-brand-bg-card rounded-3xl border border-brand-border/50 overflow-hidden shadow-lg group">
-                        <div className="h-24 bg-brand-bg-primary relative">
-                           <img 
-                            src={getImgUrl('venue', metadata.venue.id) || ''} 
-                            alt={metadata.venue.name} 
-                            className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" 
-                            onError={(e) => (e.currentTarget.style.display = 'none')}
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-brand-bg-card to-transparent" />
-                        </div>
-                        <div className="p-4 -mt-6 relative z-10">
-                          <p className="text-[9px] text-brand-text-muted font-bold uppercase tracking-widest mb-1 italic">Estadio / Recinto</p>
-                          <h5 className="text-xs font-bold text-brand-text-white truncate">{metadata.venue.name}</h5>
-                          {metadata.venue.city && <p className="text-[10px] text-brand-text-muted truncate">{metadata.venue.city}</p>}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {metadata.managers?.home && (
-                       <div className="bg-brand-bg-card rounded-3xl border border-brand-border/50 p-4 shadow-lg flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-brand-bg-primary rounded-2xl overflow-hidden border border-brand-border shrink-0">
-                             <img 
-                              src={getImgUrl('manager', metadata.managers.home.id) || ''} 
-                              alt={metadata.managers.home.name} 
-                              className="w-full h-full object-cover" 
-                              onError={(e) => (e.currentTarget.style.display = 'none')}
-                            />
-                          </div>
-                          <div className="min-w-0">
-                             <p className="text-[9px] text-brand-text-muted font-bold uppercase tracking-widest mb-0.5">Entrenador (Local)</p>
-                             <h5 className="text-xs font-bold text-brand-text-white truncate">{metadata.managers.home.name}</h5>
-                          </div>
-                       </div>
-                    )}
-
-                    {metadata.managers?.away && (
-                       <div className="bg-brand-bg-card rounded-3xl border border-brand-border/50 p-4 shadow-lg flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-brand-bg-primary rounded-2xl overflow-hidden border border-brand-border shrink-0">
-                             <img 
-                              src={getImgUrl('manager', metadata.managers.away.id) || ''} 
-                              alt={metadata.managers.away.name} 
-                              className="w-full h-full object-cover" 
-                              onError={(e) => (e.currentTarget.style.display = 'none')}
-                            />
-                          </div>
-                          <div className="min-w-0">
-                             <p className="text-[9px] text-brand-text-muted font-bold uppercase tracking-widest mb-0.5">Entrenador (Visita)</p>
-                             <h5 className="text-xs font-bold text-brand-text-white truncate">{metadata.managers.away.name}</h5>
-                          </div>
-                       </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Quick Stats Grid - Re-adding "Older" feel for quick access */}
-                {stats && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-brand-bg-card p-4 rounded-2xl border border-brand-border/50">
-                      <span className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest block mb-2">Posesión</span>
-                      <div className="flex items-end justify-between">
-                        <span className="text-lg font-mono font-bold text-brand-green">{stats.possessionHome}%</span>
-                        <span className="text-lg font-mono font-bold text-brand-red">{stats.possessionAway}%</span>
-                      </div>
+                  
+                  {incidents.length === 0 ? (
+                    <div className="p-16 border border-white/5 rounded-[3rem] text-center bg-black/20">
+                      <p className="text-[11px] font-black uppercase tracking-[0.4em] text-brand-text-muted opacity-20">Monitoring match sequence...</p>
                     </div>
-                    <div className="bg-brand-bg-card p-4 rounded-2xl border border-brand-border/50">
-                      <span className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest block mb-2">Remates</span>
-                      <div className="flex items-end justify-between">
-                        <span className="text-lg font-mono font-bold text-brand-green">{stats.shotsHome}</span>
-                        <span className="text-lg font-mono font-bold text-brand-red">{stats.shotsAway}</span>
-                      </div>
-                    </div>
-                    <div className="bg-brand-bg-card p-4 rounded-2xl border border-brand-border/50">
-                      <span className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest block mb-2">Córners</span>
-                      <div className="flex items-end justify-between">
-                        <span className="text-lg font-mono font-bold text-brand-green">{stats.cornersHome}</span>
-                        <span className="text-lg font-mono font-bold text-brand-red">{stats.cornersAway}</span>
-                      </div>
-                    </div>
-                    <div className="bg-brand-bg-card p-4 rounded-2xl border border-brand-border/50 text-center">
-                      <span className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest block mb-2">Total xG</span>
-                      <span className="text-lg font-mono font-bold text-brand-text-white">{(stats.xgHome + stats.xgAway).toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'strategy' && (
-              <div className="space-y-6">
-                {!strategyData ? (
-                  <div className="bg-brand-bg-card p-10 md:p-12 rounded-[2rem] border border-brand-border/40 text-center space-y-6 shadow-xl">
-                    <div className="relative flex justify-center">
-                      <RefreshCw className="w-12 h-12 text-brand-green animate-spin" />
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-brand-text-white font-display font-bold uppercase tracking-[0.2em]">Analizando Patrones Tácticos...</p>
-                      <p className="text-[10px] text-brand-text-muted uppercase tracking-widest">Procesando historial y métricas avanzadas</p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl space-y-4">
-                        <h4 className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest flex items-center space-x-2">
-                           <TrendingUp className="w-3.5 h-3.5 text-brand-green" />
-                           <span>Probabilidades de Victoria (Consensuadas)</span>
-                        </h4>
-                        <div className="space-y-4">
-                           <ComparisonBar label="Local" value={(prediction?.homeWinProb || 0.33) * 100} color="bg-brand-green" />
-                           <ComparisonBar label="Empate" value={(prediction?.drawProb || 0.33) * 100} color="bg-brand-yellow" />
-                           <ComparisonBar label="Visita" value={(prediction?.awayWinProb || 0.33) * 100} color="bg-brand-red" />
-                        </div>
-                      </div>
-
-                      <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl space-y-4">
-                        <h4 className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest flex items-center space-x-2">
-                           <ShieldCheck className="w-3.5 h-3.5 text-brand-blue" />
-                           <span>Análisis xG Histórico (Últimos 10)</span>
-                        </h4>
-                        <div className="space-y-4">
-                           <div className="flex justify-between items-center">
-                             <span className="text-xs text-brand-text-muted">Goles Favor/Partido</span>
-                             <div className="flex space-x-8 font-mono font-bold">
-                               <span className="text-brand-green">{strategyData.homeStats.avgGoals.toFixed(2)}</span>
-                               <span className="text-brand-red">{strategyData.awayStats.avgGoals.toFixed(2)}</span>
-                             </div>
-                           </div>
-                           <div className="flex justify-between items-center">
-                             <span className="text-xs text-brand-text-muted">Goles Contra/Partido</span>
-                             <div className="flex space-x-8 font-mono font-bold">
-                               <span className="text-brand-red">{strategyData.homeStats.avgAgainst.toFixed(2)}</span>
-                               <span className="text-brand-green">{strategyData.awayStats.avgAgainst.toFixed(2)}</span>
-                             </div>
-                           </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl">
-                      <h4 className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest mb-6 flex items-center space-x-2">
-                        <History className="w-3.5 h-3.5 text-brand-yellow" />
-                        <span>Últimos Enfrentamientos H2H</span>
-                      </h4>
-                      <div className="space-y-3">
-                        {strategyData.h2h.map((h: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between p-4 bg-brand-bg-primary/50 rounded-2xl border border-brand-border/30">
-                            <span className="text-[10px] font-mono text-brand-text-muted">{new Date(h.date).toLocaleDateString()}</span>
-                            <div className="flex-1 flex justify-center items-center space-x-4">
-                              <span className="text-xs font-bold w-20 text-right">{h.homeTeam}</span>
-                              <span className="text-sm font-mono font-black border-x border-brand-border/50 px-4">{h.homeScore} - {h.awayScore}</span>
-                              <span className="text-xs font-bold w-20 text-left">{h.awayTeam}</span>
+                  ) : (
+                    <div className="relative">
+                      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/5 -translate-x-1/2" />
+                      <div className="space-y-6 relative z-10">
+                        {incidents.map((inc, i) => (
+                          <motion.div 
+                            key={i} 
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            viewport={{ once: true }}
+                            className={cn(
+                              "flex items-center gap-8 w-full",
+                              inc.team === 'HOME' ? "flex-row-reverse text-right pr-[50%]" : "pl-[50%]"
+                            )}
+                          >
+                            <div className={cn(
+                              "flex-1 p-5 rounded-[2rem] border bg-brand-bg-card/80 backdrop-blur-xl transition-all hover:scale-105",
+                              inc.team === 'HOME' ? "border-brand-green/20" : "border-brand-red/20"
+                            )}>
+                              <div className="text-xs font-black text-white uppercase tracking-tight">{inc.player}</div>
+                              <div className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mt-1">{inc.detail}</div>
                             </div>
-                          </div>
+                            <div className={cn(
+                              "w-12 h-12 rounded-full flex items-center justify-center font-mono font-black text-sm shrink-0 border-4 z-20 shadow-2xl relative",
+                              inc.team === 'HOME' ? "bg-black border-brand-green text-brand-green" : "bg-black border-brand-red text-brand-red"
+                            )}>
+                              {inc.minute}'
+                              {inc.type === 'GOAL' && (
+                                <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute -inset-4 bg-brand-green/10 rounded-full blur-xl -z-10" />
+                              )}
+                            </div>
+                          </motion.div>
                         ))}
                       </div>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             )}
 
+
             {activeTab === 'stats' && (
-              <div className="space-y-6">
+              <div className="space-y-12">
                 {!stats ? (
-                  <div className="bg-brand-bg-card p-10 md:p-12 rounded-[2rem] border border-brand-border/40 text-center space-y-4">
-                    <BarChart3 className="w-12 h-12 mx-auto text-brand-green animate-pulse" />
-                    <p className="text-brand-text-muted italic uppercase text-[10px] tracking-widest">Esperando estadísticas en tiempo real...</p>
+                  <div className="glass-card p-16 rounded-[3rem] border border-white/5 text-center space-y-8">
+                    <RefreshCw className="w-16 h-16 text-brand-green animate-spin mx-auto opacity-50" />
+                    <p className="text-brand-text-muted uppercase text-[12px] font-black tracking-[0.4em] animate-pulse">Compilando Métricas V2.8</p>
                   </div>
                 ) : (
-                  <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl">
-                    <h4 className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest mb-8">Desglose de Estadísticas en Vivo</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                       <StatLine label="Posesión" home={stats.possessionHome || 0} away={stats.possessionAway || 0} unit="%" />
-                       <StatLine label="xG (Goles Esperados)" home={stats.xgHome || 0} away={stats.xgAway || 0} />
-                       <StatLine label="Remates a Puerta" home={stats.shotsOnTargetHome || 0} away={stats.shotsOnTargetAway || 0} />
-                       <StatLine label="Remates fuera" home={stats.shotsOffTargetHome || 0} away={stats.shotsOffTargetAway || 0} />
-                       <StatLine label="Remates Totales" home={stats.shotsHome || 0} away={stats.shotsAway || 0} />
-                       <StatLine label="Córners" home={stats.cornersHome || 0} away={stats.cornersAway || 0} />
-                       
-                       <div className="md:col-span-2 border-t border-brand-border/20 my-2 pt-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                         <StatLine label="Ataques Peligrosos" home={stats.dangerousAttacksHome || 0} away={stats.dangerousAttacksAway || 0} />
-                         <StatLine label="Ataques Totales" home={stats.attacksHome || 0} away={stats.attacksAway || 0} />
-                         <StatLine label="Ocasiones Claras" home={stats.bigChancesHome || 0} away={stats.bigChancesAway || 0} />
-                         <StatLine label="Paradas Portero" home={stats.savesHome || 0} away={stats.savesAway || 0} />
-                         <StatLine label="Pases Precisos" home={stats.accuratePassesHome || 0} away={stats.accuratePassesAway || 0} />
-                         <StatLine label="Faltas" home={stats.foulsHome || 0} away={stats.foulsAway || 0} />
-                         <StatLine label="Tarjetas Rojas" home={stats.redCardsHome || 0} away={stats.redCardsAway || 0} />
-                         <StatLine label="Tarjetas Amarillas" home={stats.yellowCardsHome || 0} away={stats.yellowCardsAway || 0} />
+                  <div className="space-y-12">
+                    {/* Advanced Performance Overview */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       {/* Expected Points / Dominance */}
+                       <div className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+                          <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                             <Target className="w-24 h-24 text-brand-green" />
+                          </div>
+                          <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] mb-10 flex items-center gap-3">
+                             <BarChart3 className="w-5 h-5 text-brand-blue" /> Dominio Táctico (xP)
+                          </h4>
+                          <div className="flex items-center justify-around py-4">
+                             <div className="text-center">
+                                <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest block mb-3">xP Local</span>
+                                <span className={cn("text-6xl font-display font-black tracking-tighter", (stats.xP_home || 0) > (stats.xP_away || 0) ? "text-brand-green underline decoration-4 underline-offset-8" : "text-brand-text-white")}>
+                                   {((stats.xP_home || (stats.xgHome * 1.8)) || 0).toFixed(2)}
+                                </span>
+                             </div>
+                             <div className="h-16 w-px bg-white/10" />
+                             <div className="text-center">
+                                <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest block mb-3">xP Visita</span>
+                                <span className={cn("text-6xl font-display font-black tracking-tighter", (stats.xP_away || 0) > (stats.xP_home || 0) ? "text-brand-green underline decoration-4 underline-offset-8" : "text-brand-text-white")}>
+                                   {((stats.xP_away || (stats.xgAway * 1.8)) || 0).toFixed(2)}
+                                </span>
+                             </div>
+                          </div>
+                       </div>
+
+                       {/* Efficiency Stats */}
+                       <div className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-10">
+                          <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] mb-6 flex items-center gap-3">
+                             <Zap className="w-5 h-5 text-brand-yellow" /> Letalidad en Ataque
+                          </h4>
+                          <div className="space-y-10">
+                             <div className="space-y-3">
+                                <div className="flex justify-between text-[11px] font-black tracking-widest">
+                                   <span className="text-brand-text-muted uppercase">{match.homeTeam}</span>
+                                   <span className="text-brand-green">{((stats.shotsHome / (stats.xgHome || 1)) || 0).toFixed(1)}x EFICIENCIA</span>
+                                </div>
+                                <div className="h-2 bg-brand-bg-primary rounded-full overflow-hidden border border-white/5">
+                                   <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((stats.shotsHome / (stats.xgHome || 1)) * 10, 100)}%` }} className="h-full bg-brand-green" />
+                                </div>
+                             </div>
+                             <div className="space-y-3">
+                                <div className="flex justify-between text-[11px] font-black tracking-widest text-brand-text-muted">
+                                   <span className="uppercase">{match.awayTeam}</span>
+                                   <span className="text-brand-red">{((stats.shotsAway / (stats.xgAway || 1)) || 0).toFixed(1)}x EFICIENCIA</span>
+                                </div>
+                                <div className="h-2 bg-brand-bg-primary rounded-full overflow-hidden border border-white/5">
+                                   <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((stats.shotsAway / (stats.xgAway || 1)) * 10, 100)}%` }} className="h-full bg-brand-red" />
+                                </div>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+
+                    {/* Detailed Stats Comparison Grid */}
+                    <div className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl">
+                       <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] mb-12">Comparative Analytics Hub</h4>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-10">
+                          <StatLine label="Posesión Central" home={stats.possessionHome || 0} away={stats.possessionAway || 0} unit="%" />
+                          <StatLine label="xG Operativo" home={stats.xgHome || 0} away={stats.xgAway || 0} />
+                          <StatLine label="Remates Efectivos" home={stats.shotsOnTargetHome || 0} away={stats.shotsOnTargetAway || 0} />
+                          <StatLine label="Volumen de Tiros" home={stats.shotsHome || 0} away={stats.shotsAway || 0} />
+                          <StatLine label="Saques de Esquina" home={stats.cornersHome || 0} away={stats.cornersAway || 0} />
+                          <StatLine label="Pases Críticos" home={stats.accuratePassesHome || 0} away={stats.accuratePassesAway || 0} />
+                          
+                          <div className="md:col-span-2 border-t border-white/5 my-4 pt-12 grid grid-cols-1 md:grid-cols-2 gap-x-20 gap-y-10">
+                            <StatLine label="Ataques de Peligro" home={stats.dangerousAttacksHome || 0} away={stats.dangerousAttacksAway || 0} />
+                            <StatLine label="Ocasiones Manifiestas" home={stats.bigChancesHome || 0} away={stats.bigChancesAway || 0} />
+                            <StatLine label="Paradas de Valor" home={stats.savesHome || 0} away={stats.savesAway || 0} />
+                            <StatLine label="Disciplina (Faltas)" home={stats.foulsHome || 0} away={stats.foulsAway || 0} />
+                          </div>
                        </div>
                     </div>
 
                     {playerStats && playerStats.length > 0 && (
-                      <div className="mt-12 space-y-4">
-                        <h4 className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Estadísticas Detalladas de Jugadores</h4>
-                        <div className="tabla-wrapper">
-                          <table className="w-full text-[10px] text-brand-text-muted min-w-[600px]">
-                            <thead>
-                              <tr className="text-left border-b border-brand-border/30">
-                                <th className="pb-2 font-black uppercase">Jugador</th>
-                                <th className="pb-2 text-center font-black uppercase">Min</th>
-                                <th className="pb-2 text-center font-black uppercase">G</th>
-                                <th className="pb-2 text-center font-black uppercase">Ast</th>
-                                <th className="pb-2 text-center font-black uppercase">xG</th>
-                                <th className="pb-2 text-center font-black uppercase">Rating</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {playerStats.map((ps, i) => (
-                                <tr key={i} className="border-b border-brand-border/10 hover:bg-white/5 transition-colors">
-                                  <td className="py-3 font-bold text-brand-text-light">#{ps.player_id}</td>
-                                  <td className="py-3 text-center font-mono">{ps.minutes_played}'</td>
-                                  <td className="py-3 text-center font-mono text-brand-green">{ps.goals}</td>
-                                  <td className="py-3 text-center font-mono text-brand-blue">{ps.goal_assist}</td>
-                                  <td className="py-3 text-center font-mono">{(ps.expected_goals || 0).toFixed(2)}</td>
-                                  <td className="py-3 text-center font-mono">
-                                    <span className={cn(
-                                      "px-1.5 py-0.5 rounded",
-                                      ps.rating >= 7.5 ? "bg-brand-green text-black" : ps.rating >= 6.5 ? "bg-brand-yellow text-black" : "bg-brand-red text-white"
-                                    )}>
-                                      {ps.rating.toFixed(1)}
-                                    </span>
-                                  </td>
+                      <div className="space-y-8">
+                        <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Player Tactical Breakdown</h4>
+                        <div className="bg-brand-bg-card rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                              <thead>
+                                <tr className="bg-white/[0.02] text-[10px] font-black text-brand-text-muted uppercase tracking-widest border-b border-white/5">
+                                  <th className="py-6 px-8">Atleta</th>
+                                  <th className="py-6 px-4 text-center">Tiempo</th>
+                                  <th className="py-6 px-4 text-center">xG Acc</th>
+                                  <th className="py-6 px-4 text-center">G/A</th>
+                                  <th className="py-6 px-8 text-right">Valoración</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                {playerStats.slice(0, 8).map((ps, i) => (
+                                  <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
+                                    <td className="py-4 px-8">
+                                       <div className="flex items-center gap-4">
+                                          <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center font-mono font-black text-brand-green border border-white/5 group-hover:border-brand-green/30 transition-all">#{ps.player_id % 99}</div>
+                                          <div>
+                                             <div className="text-sm font-black text-brand-text-white uppercase leading-none mb-1">Nombre Jugador</div>
+                                             <div className="text-[9px] font-bold text-brand-text-muted uppercase tracking-tighter">Posición Clave</div>
+                                          </div>
+                                       </div>
+                                    </td>
+                                    <td className="py-4 px-4 text-center font-mono text-xs text-brand-text-muted">{ps.minutes_played}'</td>
+                                    <td className="py-4 px-4 text-center font-mono text-xs text-brand-text-white">{(ps.expected_goals || 0).toFixed(2)}</td>
+                                    <td className="py-4 px-4 text-center font-mono text-xs text-brand-green">{ps.goals}/{ps.goal_assist}</td>
+                                    <td className="py-4 px-8 text-right">
+                                      <span className={cn(
+                                        "inline-flex items-center justify-center w-12 h-6 rounded-lg font-mono font-black text-[10px]",
+                                        ps.rating >= 7.5 ? "bg-brand-green text-black" : ps.rating >= 6.5 ? "bg-white/10 text-white" : "bg-brand-red/20 text-brand-red border border-brand-red/20"
+                                      )}>
+                                        {ps.rating.toFixed(1)}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -986,116 +1026,95 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
               </div>
             )}
 
-            {activeTab === 'incidents' && incidents && (
-              <div className="space-y-4">
-                {incidents.length === 0 ? (
-                  <div className="glass-card bg-brand-bg-card p-10 md:p-12 rounded-3xl border border-brand-border text-center space-y-4">
-                    <History className="w-12 h-12 mx-auto text-brand-text-muted opacity-20" />
-                    <p className="text-brand-text-muted italic uppercase text-xs tracking-widest">Aún no se han registrado incidentes clave</p>
-                  </div>
-                ) : (
-                  <div className="bg-brand-bg-card p-8 rounded-3xl border border-brand-border shadow-xl space-y-8">
-                    {incidents.map((inc, i) => (
-                      <div key={i} className="flex items-center space-x-6 relative before:absolute before:left-[11px] before:top-8 before:bottom-[-20px] before:w-[2px] before:bg-brand-border last:before:hidden">
-                        <div className={cn(
-                          "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold z-10 shrink-0",
-                          inc.type === 'GOAL' ? "bg-brand-green text-black" : "bg-brand-yellow text-black"
-                        )}>
-                          {inc.minute}'
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-brand-text-white">{inc.player}</p>
-                          <p className="text-[10px] text-brand-text-muted uppercase tracking-wider">{inc.type === 'GOAL' ? 'GOOOOL!' : inc.detail}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
             {activeTab === 'lineups' && (
-              <div className="space-y-6">
+              <div className="space-y-12">
                 {!lineups || lineups.lineup_status === 'unavailable' ? (
-                  <div className="glass-card bg-brand-bg-card p-10 md:p-12 rounded-3xl border border-brand-border text-center space-y-4">
-                    <Users className="w-12 h-12 mx-auto text-brand-text-muted opacity-20" />
-                    <p className="text-brand-text-muted italic uppercase text-xs tracking-widest">
-                      {lineups?.lineup_status === 'unavailable' ? 'Alineaciones aún no disponibles' : 'Cargando alineaciones...'}
-                    </p>
+                  <div className="glass-card bg-brand-bg-card p-20 rounded-[3rem] border border-white/5 text-center space-y-6">
+                    <Users className="w-16 h-16 mx-auto text-brand-text-muted opacity-10" />
+                    <p className="text-brand-text-muted italic uppercase text-[11px] font-black tracking-[0.4em]">Tactical Feed Pending...</p>
                   </div>
                 ) : (
-                  <div className="space-y-8">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
+                  <div className="space-y-12">
+                    <div className="flex items-center justify-between px-4">
+                      <div className="flex items-center gap-6">
                         <div className={cn(
-                          "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                          lineups.lineup_status === 'confirmed' ? "bg-brand-green/20 border-brand-green text-brand-green" : "bg-brand-yellow/20 border-brand-yellow text-brand-yellow"
+                          "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border shadow-lg",
+                          lineups.lineup_status === 'confirmed' ? "bg-brand-green border-brand-green/30 text-black" : "bg-brand-yellow/20 border-brand-yellow/30 text-brand-yellow"
                         )}>
-                          {lineups.lineup_status === 'confirmed' ? 'Confirmada' : 'Predicha por IA'}
+                          {lineups.lineup_status === 'confirmed' ? 'Oficial' : 'Proyectada'}
                         </div>
-                        {lineups.beta && <span className="text-[8px] text-brand-blue font-bold uppercase tracking-widest bg-brand-blue/10 px-2 py-0.5 rounded border border-brand-blue/30">Beta</span>}
+                        {lineups.beta && <span className="text-[9px] text-brand-blue font-black uppercase tracking-[0.3em] bg-brand-blue/10 px-3 py-1 rounded-lg border border-brand-blue/20">Alpha V2</span>}
                       </div>
                       {lineups.updated_at && (
-                        <span className="text-[9px] text-brand-text-muted font-mono flex items-center">
-                          <RefreshCw className="w-3 h-3 mr-1" /> Actualizado: {new Date(lineups.updated_at).toLocaleTimeString()}
+                        <span className="text-[10px] text-brand-text-muted font-mono flex items-center opacity-40 uppercase tracking-widest">
+                          <RefreshCw className="w-3.5 h-3.5 mr-2" /> Sync: {new Date(lineups.updated_at).toLocaleTimeString()}
                         </span>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                       {['home', 'away'].map((side) => {
                         const team = side === 'home' ? lineups.lineups?.home : lineups.lineups?.away;
                         if (!team) return null;
                         return (
-                          <div key={side} className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl space-y-6">
-                             <div className="flex justify-between items-center">
-                               <h4 className="text-sm font-display font-black text-brand-text-white flex items-center gap-2">
-                                 <TeamLogo name={team.team_name} size="sm" />
-                                 {team.team_name}
-                               </h4>
-                               <span className="text-[10px] font-mono font-bold text-brand-text-muted bg-white/5 px-2 py-1 rounded">{team.formation}</span>
+                          <div key={side} className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-10 relative overflow-hidden group">
+                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl -mr-16 -mt-16 group-hover:bg-brand-green/10 transition-all duration-700" />
+                             <div className="flex justify-between items-center relative z-10">
+                               <div className="flex items-center gap-4">
+                                  <TeamLogo name={team.team_name} size="md" className="w-12 h-12" />
+                                  <h4 className="text-xl font-display font-black text-brand-text-white uppercase tracking-tight">
+                                    {team.team_name}
+                                  </h4>
+                               </div>
+                               <div className="text-[12px] font-mono font-black text-brand-text-muted bg-white/5 px-4 py-1.5 rounded-xl border border-white/5">{team.formation}</div>
                              </div>
 
                              {team.confidence !== undefined && team.confidence !== null && (
-                               <div className="space-y-1.5">
-                                 <div className="flex justify-between items-center text-[9px] uppercase font-bold tracking-widest text-brand-text-muted">
-                                   <span>Confianza IA</span>
-                                   <span className="text-brand-green">{(team.confidence * 100).toFixed(1)}%</span>
+                               <div className="space-y-3">
+                                 <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-[0.3em] text-brand-text-muted">
+                                   <span>Neural Accuracy</span>
+                                   <span className="text-brand-green">{(team.confidence * 100).toFixed(0)}%</span>
                                  </div>
-                                 <div className="h-1 bg-brand-bg-primary rounded-full overflow-hidden">
-                                   <div className="h-full bg-brand-green" style={{ width: `${team.confidence * 100}%` }} />
+                                 <div className="h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                   <motion.div initial={{ width: 0 }} animate={{ width: `${team.confidence * 100}%` }} className="h-full bg-brand-green shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
                                  </div>
                                </div>
                              )}
 
-                             <div className="space-y-2">
-                               {team.players.map(p => (
-                                 <div key={p.id} className="flex items-center justify-between p-2.5 bg-brand-bg-primary/50 rounded-xl border border-brand-border/30 hover:border-brand-green/30 transition-all cursor-default group">
-                                   <div className="flex items-center space-x-3">
-                                     <div className="w-8 h-8 rounded-lg bg-brand-bg-card border border-brand-border flex items-center justify-center overflow-hidden shrink-0 group-hover:border-brand-green/50">
+                             <div className="space-y-3">
+                               {team.players.map((p, idx) => (
+                                 <div key={p.id} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-2xl border border-white/5 hover:border-brand-green/40 transition-all cursor-default group/item">
+                                   <div className="flex items-center space-x-5">
+                                     <div className="w-12 h-12 rounded-2xl bg-black border-2 border-white/5 flex items-center justify-center overflow-hidden shrink-0 group-hover/item:border-brand-green/50 transition-all shadow-xl">
                                        {getImgUrl('player', p.id) ? (
                                          <img 
                                            src={getImgUrl('player', p.id)!} 
                                            alt={p.name} 
-                                           className="w-full h-full object-cover"
+                                           className="w-full h-full object-cover grayscale opacity-60 group-hover/item:grayscale-0 group-hover/item:opacity-100 transition-all duration-500"
                                            onError={(e) => {
                                              e.currentTarget.style.display = 'none';
-                                             e.currentTarget.parentElement!.innerHTML = `<span class="text-[10px] font-mono font-bold text-brand-text-light">${p.jersey_number || '?'}</span>`;
+                                             e.currentTarget.parentElement!.innerHTML = `<span class="text-sm font-mono font-black text-brand-green">${p.jersey_number || (idx + 1)}</span>`;
                                            }}
                                          />
                                        ) : (
-                                          <span className="text-[10px] font-mono font-bold text-brand-text-light">{p.jersey_number || '?'}</span>
+                                          <span className="text-sm font-mono font-black text-brand-green">{p.jersey_number || (idx + 1)}</span>
                                        )}
                                      </div>
                                      <div>
-                                       <p className="text-xs font-bold text-brand-text-white">{p.name}</p>
-                                       <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-white/5 text-brand-text-muted uppercase tracking-tighter">{p.position}</span>
+                                       <p className="text-sm font-black text-brand-text-white uppercase tracking-tight leading-none mb-1 group-hover/item:text-brand-green transition-colors">{p.name}</p>
+                                       <div className="flex items-center gap-2">
+                                          <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">{p.position}</span>
+                                          {p.ai_score !== undefined && (
+                                             <div className="h-1 w-1 rounded-full bg-brand-green/40" />
+                                          )}
+                                       </div>
                                      </div>
                                    </div>
                                    {p.ai_score !== undefined && (
                                      <div className="text-right">
-                                       <div className="text-[10px] font-mono font-bold text-brand-green">{(p.ai_score * 100).toFixed(1)}%</div>
-                                       <div className="text-[8px] text-brand-text-muted uppercase tracking-widest">Afinidad IA</div>
+                                       <div className="text-[12px] font-display font-black text-white leading-none">{(p.ai_score * 10).toFixed(1)}</div>
+                                       <div className="text-[8px] text-brand-text-muted uppercase tracking-[0.2em] mt-1">IA Index</div>
                                      </div>
                                    )}
                                  </div>
@@ -1103,27 +1122,27 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                              </div>
 
                              {team.substitutes && team.substitutes.length > 0 && (
-                               <div className="pt-4 border-t border-brand-border/30">
-                                 <h5 className="text-[9px] text-brand-text-muted font-black uppercase tracking-widest mb-4">Suplentes</h5>
-                                 <div className="grid grid-cols-2 gap-3">
-                                    {team.substitutes.map(p => (
-                                      <div key={p.id} className="text-[10px] font-bold text-brand-text-muted p-2 flex items-center bg-white/3 rounded-xl border border-white/5 hover:border-brand-green/30 transition-colors group">
-                                        <div className="w-6 h-6 rounded-md bg-brand-bg-card border border-brand-border flex items-center justify-center overflow-hidden shrink-0 mr-2 group-hover:border-brand-green/30">
+                               <div className="pt-8 border-t border-white/5">
+                                 <h5 className="text-[10px] text-brand-text-muted font-black uppercase tracking-[0.4em] mb-6 px-2">Bench Strategy</h5>
+                                 <div className="grid grid-cols-2 gap-4">
+                                    {team.substitutes.slice(0, 10).map(p => (
+                                      <div key={p.id} className="text-[11px] font-black text-brand-text-muted p-3 flex items-center bg-white/[0.01] rounded-2xl border border-white/5 hover:border-brand-green/30 transition-all group/sub">
+                                        <div className="w-7 h-7 rounded-lg bg-black border border-white/5 flex items-center justify-center overflow-hidden shrink-0 mr-3 group-hover/sub:border-brand-green/40">
                                           {getImgUrl('player', p.id) ? (
                                             <img
                                               src={getImgUrl('player', p.id)!}
                                               alt={p.name}
-                                              className="w-full h-full object-cover"
+                                              className="w-full h-full object-cover group-hover/sub:scale-110 transition-transform"
                                               onError={(e) => {
                                                 e.currentTarget.style.display = 'none';
-                                                e.currentTarget.parentElement!.innerHTML = `<span class="text-[8px] font-mono font-bold">${p.jersey_number || '?'}</span>`;
+                                                e.currentTarget.parentElement!.innerHTML = `<span class="text-[9px] font-mono font-black">${p.jersey_number || '?'}</span>`;
                                               }}
                                             />
                                           ) : (
-                                            <span className="text-[8px] font-mono font-bold">{p.jersey_number || '?'}</span>
+                                            <span className="text-[9px] font-mono font-black">{p.jersey_number || '?'}</span>
                                           )}
                                         </div>
-                                        <span className="truncate">{p.short_name || p.name}</span>
+                                        <span className="truncate uppercase tracking-tight group-hover/sub:text-white transition-colors">{p.short_name || p.name}</span>
                                       </div>
                                     ))}
                                  </div>
@@ -1135,25 +1154,28 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                     </div>
 
                     {lineups.unavailable_players && (
-                      <div className="bg-brand-bg-card p-6 rounded-3xl border border-brand-border shadow-xl">
-                        <h4 className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest mb-6 flex items-center gap-2">
-                          <AlertCircle className="w-3.5 h-3.5 text-brand-red" /> Jugadores no disponibles
+                      <div className="bg-brand-bg-card p-10 rounded-[3rem] border border-white/5 shadow-2xl relative overflow-hidden">
+                        <div className="absolute inset-0 bg-brand-red/5 blur-3xl opacity-20 pointer-events-none" />
+                        <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em] mb-10 flex items-center gap-3 relative z-10">
+                          <AlertCircle className="w-5 h-5 text-brand-red" /> Atletas No Disponibles
                         </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 relative z-10">
                           {['home', 'away'].map(side => {
                             const psArr = side === 'home' ? lineups.unavailable_players?.home : lineups.unavailable_players?.away;
                             if (!psArr || psArr.length === 0) return null;
                             return (
-                              <div key={side}>
-                                <p className="text-[9px] text-brand-red font-black uppercase tracking-widest mb-3">{side === 'home' ? match.homeTeam : match.awayTeam}</p>
-                                <div className="space-y-2">
+                              <div key={side} className="space-y-4">
+                                <p className="text-[10px] text-brand-red font-black uppercase tracking-[0.4em] mb-6 px-2">{side === 'home' ? match.homeTeam : match.awayTeam}</p>
+                                <div className="space-y-3">
                                   {psArr.map(p => (
-                                    <div key={p.id} className="p-3 bg-brand-red/5 border border-brand-red/20 rounded-2xl flex justify-between items-center text-xs">
+                                    <div key={p.id} className="p-5 bg-brand-red/[0.02] border border-brand-red/10 rounded-2xl flex justify-between items-center transition-all hover:bg-brand-red/[0.05]">
                                       <div>
-                                        <span className="font-bold text-brand-text-white">{p.name}</span>
-                                        <div className="text-[9px] text-brand-text-muted uppercase tracking-widest mt-0.5">{p.status}</div>
+                                        <span className="font-black text-brand-text-white uppercase tracking-tight">{p.name}</span>
+                                        <div className="text-[9px] text-brand-text-muted uppercase tracking-[0.2em] font-black mt-1.5">{p.status}</div>
                                       </div>
-                                      <span className="text-[10px] font-medium text-brand-red/70">{p.reason}</span>
+                                      <div className="text-right">
+                                         <span className="text-[10px] font-black text-brand-red px-3 py-1 bg-brand-red/10 rounded-lg uppercase tracking-widest">{p.reason}</span>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -1167,64 +1189,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                 )}
               </div>
             )}
-            {activeTab === 'ai' && (
-              <div className="space-y-6">
-                <div className="bg-brand-bg-card p-6 md:p-10 rounded-[2rem] border border-brand-border shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/10 blur-[100px] -mr-16 -mt-16" />
-                  <div className="absolute bottom-0 left-0 w-32 h-32 bg-brand-blue/10 blur-[100px] -ml-16 -mb-16" />
-                  
-                  <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 mb-10 md:mb-14">
-                    <div className="p-3 md:p-4 bg-brand-bg-primary rounded-2xl border border-brand-border/50 shadow-inner">
-                      <Zap className="w-6 h-6 md:w-8 md:h-8 text-brand-green animate-pulse" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl md:text-4xl font-display font-black text-brand-text-white tracking-[0.1em] md:tracking-widest uppercase leading-tight">
-                        Análisis Profundos de IA
-                      </h3>
-                      <p className="text-[9px] md:text-xs text-brand-text-muted font-mono uppercase tracking-[0.3em] mt-1">Análisis Predictivo de Alto Nivel</p>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14">
-                     <div className="space-y-6">
-                        <div className="flex items-center gap-3">
-                           <Target className="w-4 h-4 text-brand-red" />
-                           <h4 className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.3em]">Veredicto Táctico</h4>
-                        </div>
-                        <div className="bg-brand-bg-primary/50 relative overflow-hidden rounded-2xl border border-brand-border/30 p-5 md:p-8 shadow-inner">
-                           <div className="absolute top-0 left-0 w-1 h-full bg-brand-green opacity-50" />
-                           <p className="text-sm md:text-lg text-brand-text-light leading-relaxed italic font-medium">
-                              "{(metadata?.ai_preview?.text || "Analizando flujo heurístico... Se detecta un patrón de transiciones rápidas y presión constante en zonas críticas.")}"
-                           </p>
-                        </div>
-                     </div>
-
-                     <div className="space-y-6">
-                        <div className="flex items-center gap-3">
-                           <TrendingUp className="w-4 h-4 text-brand-green" />
-                           <h4 className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.3em]">Métricas de Valor</h4>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                           <div className="bg-brand-bg-primary/40 p-5 rounded-2xl border border-white/5 flex flex-col justify-between h-24 md:h-32">
-                              <span className="text-[8px] text-brand-text-muted font-bold uppercase tracking-widest">Valor xG Táctico</span>
-                              <div className="flex items-baseline gap-2">
-                                 <span className="text-2xl md:text-4xl font-mono font-black text-brand-green">{(stats ? (stats.xgHome + stats.xgAway) : 1.40).toFixed(2)}</span>
-                                 <div className="px-1.5 py-0.5 rounded text-[7px] font-black bg-brand-green/20 text-brand-green">ALTO</div>
-                              </div>
-                           </div>
-                           <div className="bg-brand-bg-primary/40 p-5 rounded-2xl border border-white/5 flex flex-col justify-between h-24 md:h-32">
-                              <span className="text-[8px] text-brand-text-muted font-bold uppercase tracking-widest">Momentum</span>
-                              <div className="flex items-baseline gap-2">
-                                 <span className="text-2xl md:text-4xl font-mono font-black text-brand-blue">{(Math.abs(momentum) * 10).toFixed(1)}</span>
-                                 <span className="text-[9px] font-bold text-brand-text-muted uppercase">Índice</span>
-                              </div>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </motion.div>
         </AnimatePresence>
         

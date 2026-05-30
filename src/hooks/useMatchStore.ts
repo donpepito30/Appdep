@@ -281,7 +281,7 @@ export function useMatchStore() {
       
       if (options.stats) {
         promises.push(api.getStats(id).then(s => updates.stats = s));
-        promises.push(api.getPredictions(id).then(p => updates.mlPrediction = p));
+        promises.push(api.getPredictionDetailed(id).then(p => updates.mlPrediction = p));
         promises.push(api.getOdds(id).then(o => updates.odds = o));
         promises.push(api.getIncidents(id).then(inc => updates.incidents = inc));
       }

@@ -520,6 +520,9 @@ export const api = {
                   passesAway: stats.passesAway,
                   accuratePassesHome: stats.accuratePassesHome,
                   accuratePassesAway: stats.accuratePassesAway,
+                  momentum_score: data.momentum ?? data.momentum_score ?? (stats.dangerousAttacksHome ? (stats.dangerousAttacksHome - (stats.dangerousAttacksAway || 0)) : 0),
+                  xP_home: data.xP_home ?? data.xp_home,
+                  xP_away: data.xP_away ?? data.xp_away,
                 } as Stats;
               }
             }
@@ -542,6 +545,9 @@ export const api = {
                   foulsAway: s.fouls_away ?? s.foulsAway ?? 0,
                   yellowCardsHome: s.yellow_cards_home ?? s.yellowCardsHome ?? 0,
                   yellowCardsAway: s.yellow_cards_away ?? s.yellowCardsAway ?? 0,
+                  momentum_score: s.momentum ?? s.momentum_score,
+                  xP_home: s.xP_home ?? s.xp_home,
+                  xP_away: s.xP_away ?? s.xp_away,
                 } as Stats;
             }
             return null;
@@ -564,43 +570,85 @@ export const api = {
     }
   },
 
-  getPredictions: async (eventId: string, onUpdate?: (data: Prediction | null) => void, options?: { signal?: AbortSignal }): Promise<Prediction | null> => {
+  getPredictionDetailed: async (eventId: string, onUpdate?: (data: Prediction | null) => void): Promise<Prediction | null> => {
     try {
+      // Prioritize v2 endpoint
+      const res = await fetchSeguro(`eventos/${eventId}/predicción/`, onUpdate, (data) => {
+        if (!data) return null;
+        
+        const m = data.mercados || {};
+        const scoreM = m['puntuación'] || m['puntuacion'] || {};
+        const resM = m['resultado_partido'] || {};
+        const mmM = m['más_menos'] || {};
+        const amM = m['ambos marcan'] || {};
+        const model = data.modelo || {};
+        const recs = data.recomendaciones || {};
+
+        const parseProb = (v: any, fallback = 0) => {
+          if (v === undefined || v === null) return fallback;
+          const n = Number(v);
+          if (isNaN(n)) return fallback;
+          return n > 1 ? n / 100 : n;
+        };
+
+        return {
+          homeWinProb: parseProb(resM.prob_local || resM.prob_1),
+          drawProb: parseProb(resM.prob_empate || resM.prob_x),
+          awayWinProb: parseProb(resM.prob_visitante || resM.prob_2),
+          scoreline: scoreM.más_probable || scoreM.scoreline || data.scoreline,
+          source: `BZZOIRO_AI_${model.versión || 'v2'}`,
+          confidence: model.confianza || 0.85,
+          btts: !!(recs.btts),
+          bttsProb: parseProb(amM.prob_sí || amM.yes),
+          over15Prob: parseProb(mmM.prob_más_15 || mmM.over_15),
+          over25Prob: parseProb(mmM.prob_más_25 || mmM.over_25),
+          over35Prob: parseProb(mmM.prob_más_35 || mmM.over_35),
+          valueAnalysis: data.analisis_valor ? {
+            expectedRoi: Number(data.analisis_valor.roi || 0),
+            valueScore: Number(data.analisis_valor.score || 0),
+            isValue: !!data.analisis_valor.es_valor,
+            recommendedStake: Number(data.analisis_valor.stake || 1),
+            market: data.analisis_valor.mercado || recs.opportunity_market,
+            odds: Number(data.analisis_valor.cuota || 0),
+            probability: parseProb(data.analisis_valor.probabilidad || 0),
+            percentage: Number(data.analisis_valor.ventaja || data.analisis_valor.percentage || data.analisis_valor.roi || 0)
+          } : undefined,
+          recommendations: {
+            favorito: recs.favorito,
+            favorite_prob: recs.favorite_prob,
+            bet_favorite: !!recs.bet_favorite,
+            over_15: !!recs.over_15,
+            over_25: !!recs.over_25,
+            over_35: !!recs.over_35,
+            btts: !!recs.btts,
+            ganador: !!recs.ganador,
+            value_detected: !!(recs.bet_favorite || recs.ganador || recs.over_25 || (data.analisis_valor && data.analisis_valor.es_valor)),
+            opportunity_market: recs.bet_favorite ? 'Favorito con Valor' : recs.over_25 ? 'Over 2.5 Probable' : recs.btts ? 'BTTS Sí' : undefined
+          }
+        } as Prediction;
+      }, { silent404: true, cacheTTL: 60000 });
+
+      if (res) return res;
+
+      // Fallback to simpler predictions endpoint if v2 fails or is 404
       return await fetchSeguro(`predictions/${eventId}`, onUpdate, (data) => {
         if (!data) return null;
-        // Handle common variations in field names and ensure they are numbers 0-1
-        let probHome = Number(data.prob_home ?? data.home_win ?? data.prob_1 ?? data.homeWinProb ?? 0);
-        let probDraw = Number(data.prob_draw ?? data.draw ?? data.prob_x ?? data.drawProb ?? 0);
-        let probAway = Number(data.prob_away ?? data.away_win ?? data.prob_2 ?? data.awayWinProb ?? 0);
-        
-        // Convert percentage to decimal if they are > 1
-        if (probHome > 1 || probDraw > 1 || probAway > 1) {
-           probHome /= 100;
-           probDraw /= 100;
-           probAway /= 100;
-        }
+        let p1 = Number(data.prob_home ?? data.home_win ?? 0);
+        let px = Number(data.prob_draw ?? data.draw ?? 0);
+        let p2 = Number(data.prob_away ?? data.away_win ?? 0);
+        if (p1 > 1) { p1/=100; px/=100; p2/=100; }
 
-        const parseProb = (val: any, defaultProb: number) => {
-           if (typeof val === 'boolean') return val ? defaultProb : (1 - defaultProb);
-           const num = Number(val);
-           if (isNaN(num)) return 0;
-           return num > 1 ? num / 100 : num;
-        };
-        
         return {
-          homeWinProb: probHome,
-          drawProb: probDraw,
-          awayWinProb: probAway,
-          scoreline: data.scoreline || data.predicted_score || data.score || undefined,
-          source: 'BZZOIRO_AI',
-          confidence: parseProb(data.confidence, 0.8),
-          btts: !!(data.prob_btts || data.btts_prob || data.btts),
-          bttsProb: parseProb(data.prob_btts || data.btts_prob || data.btts, 0.65),
-          over15Prob: parseProb(data.prob_over_1_5 || data.over_1_5, 0.8),
-          over25Prob: parseProb(data.prob_over_2_5 || data.over_2_5, 0.55),
-          over35Prob: parseProb(data.prob_over_3_5 || data.over_3_5, 0.3),
-        };
-      }, { silent404: true, cacheTTL: 60000, signal: options?.signal }); // Cache de 60s para predicciones
+          homeWinProb: p1,
+          drawProb: px,
+          awayWinProb: p2,
+          scoreline: data.scoreline || data.predicted_score,
+          source: 'BZZOIRO_V1_LEGACY',
+          confidence: 0.7,
+          btts: !!data.btts,
+          bttsProb: (data.btts_prob || 0.5) > 1 ? (data.btts_prob/100) : (data.btts_prob || 0.5),
+        } as Prediction;
+      }, { silent404: true, cacheTTL: 60000 });
     } catch {
       return null;
     }
@@ -613,7 +661,7 @@ export const api = {
     for (let i = 0; i < eventIds.length; i += batchSize) {
       const batch = eventIds.slice(i, i + batchSize);
       const batchResults = await Promise.all(
-        batch.map(id => api.getPredictions(id))
+        batch.map(id => api.getPredictionDetailed(id))
       );
       batch.forEach((id, index) => {
         results[id] = batchResults[index];
@@ -707,56 +755,7 @@ export const api = {
     }
   },
 
-  getEventPrediction: async (eventId: string, onUpdate?: (data: Prediction | null) => void): Promise<Prediction | null> => {
-    try {
-      return await fetchSeguro(`eventos/${eventId}/predicción/`, onUpdate, (data) => {
-        if (!data) return null;
-        
-        const m = data.mercados || {};
-        const scoreM = m['puntuación'] || m['puntuacion'] || {};
-        const resM = m['resultado_partido'] || {};
-        const mmM = m['más_menos'] || {};
-        const amM = m['ambos marcan'] || {};
-        const model = data.modelo || {};
-        const recs = data.recomendaciones || {};
 
-        const parseProb = (v: any) => {
-          if (v === undefined || v === null) return 0;
-          const n = Number(v);
-          if (isNaN(n)) return 0;
-          return n > 1 ? n / 100 : n;
-        };
-
-        return {
-          homeWinProb: parseProb(resM.prob_local),
-          drawProb: parseProb(resM.prob_empate),
-          awayWinProb: parseProb(resM.prob_visitante),
-          scoreline: scoreM.más_probable,
-          source: `BZZOIRO_AI_${model.versión || 'v2'}`,
-          confidence: model.confianza || 0.85,
-          btts: !!(recs.btts),
-          bttsProb: parseProb(amM.prob_sí),
-          over15Prob: parseProb(mmM.prob_más_15),
-          over25Prob: parseProb(mmM.prob_más_25),
-          over35Prob: parseProb(mmM.prob_más_35),
-          recommendations: {
-            favorito: recs.favorito,
-            favorite_prob: recs.favorite_prob,
-            bet_favorite: !!recs.bet_favorite,
-            over_15: !!recs.over_15,
-            over_25: !!recs.over_25,
-            over_35: !!recs.over_35,
-            btts: !!recs.btts,
-            ganador: !!recs.ganador,
-            value_detected: !!(recs.bet_favorite || recs.ganador || recs.over_25),
-            opportunity_market: recs.bet_favorite ? 'Favorito con Valor' : recs.over_25 ? 'Over 2.5 Probable' : recs.btts ? 'BTTS Sí' : undefined
-          }
-        };
-      }, { silent404: true, cacheTTL: 60000 });
-    } catch {
-      return null;
-    }
-  },
 
   getOdds: async (eventId: string, onUpdate?: (data: any) => void, options?: { signal?: AbortSignal }): Promise<OddMarket | null> => {
     try {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { TVChannel, Broadcast } from '../types';
 import { Tv, Globe, Search, RefreshCw, Calendar, ExternalLink, Filter } from 'lucide-react';
+import { Footer } from './Footer';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../types';
 
@@ -247,6 +248,9 @@ export function TVGuideView() {
             </motion.div>
           )}
         </AnimatePresence>
+        <div className="mt-12 pt-12 border-t border-brand-border/10">
+          <Footer />
+        </div>
       </div>
     </div>
   );

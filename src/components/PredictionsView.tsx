@@ -45,7 +45,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
   if (!groupedByDay || (groupedByDay.today.length === 0 && groupedByDay.tomorrow.length === 0 && groupedByDay.dayAfter.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
-        <div className="w-16 h-16 rounded-full bg-brand-bg-secondary flex items-center justify-center border border-white/5 animate-pulse">
+        <div className="custom-icon-wrapper w-16 h-16 rounded-[2rem] bg-brand-bg-secondary flex items-center justify-center border border-white/5 animate-pulse">
           <Calendar className="w-8 h-8 text-brand-text-muted" />
         </div>
         <p className="text-brand-text-muted font-black uppercase text-[10px] tracking-[0.3em]">Cargando calendario...</p>
@@ -59,7 +59,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass-card p-6 rounded-[2rem] border border-brand-border/40 bg-brand-bg-primary/20 lg:col-span-2">
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-brand-green/10 rounded-2xl">
+            <div className="custom-icon-wrapper bg-brand-green/10">
               <Sparkles className="w-6 h-6 text-brand-green" />
             </div>
             <div>
@@ -88,8 +88,10 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
         </div>
 
         <div className="glass-card p-6 rounded-[2rem] border border-brand-yellow/20 bg-brand-yellow/5 flex flex-col justify-center">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="w-4 h-4 text-brand-yellow" />
+            <div className="flex items-center gap-3 mb-3">
+              <div className="custom-icon-wrapper w-8 h-8 scale-75 border-brand-yellow/30">
+                <TrendingUp className="w-4 h-4 text-brand-yellow" />
+              </div>
               <span className="text-[10px] font-black text-brand-yellow uppercase tracking-widest">Tendencia del Día</span>
             </div>
             <p className="text-[11px] text-brand-text-muted uppercase font-bold tracking-tight leading-normal">
@@ -102,7 +104,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
       {topPick && (
         <section className="space-y-6">
           <div className="flex items-center gap-3 px-2">
-            <div className="p-2 bg-brand-yellow/10 rounded-xl">
+            <div className="custom-icon-wrapper border-brand-yellow/30">
               <Sparkles className="w-4 h-4 text-brand-yellow" />
             </div>
             <h2 className="text-xl font-black text-brand-text-white tracking-wide uppercase">
@@ -140,7 +142,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
       {otherTopPicks.length > 0 && (
         <section className="space-y-6">
           <div className="flex items-center gap-3 px-2">
-            <div className="p-2 bg-brand-green/10 rounded-xl">
+            <div className="custom-icon-wrapper border-brand-green/30">
               <TrendingUp className="w-4 h-4 text-brand-green" />
             </div>
             <h2 className="text-xl font-black text-brand-text-white tracking-wide uppercase">

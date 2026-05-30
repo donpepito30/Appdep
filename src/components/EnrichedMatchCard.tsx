@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion } from 'motion/react';
-import { HelpCircle, Info } from 'lucide-react';
+import { HelpCircle, Info, Target, TrendingUp } from 'lucide-react';
 import { Event, Stats } from '../types';
 import { TeamLogo } from './TeamLogo';
 import { api, logoCache, fallosLogos, nameCache, getImgUrl } from '../services/api';
@@ -196,84 +196,63 @@ export const EnrichedMatchCard: React.FC<EnrichedMatchCardProps> = memo(({
       <motion.button
         ref={ref}
         aria-label={ariaLabel}
-        whileHover={{ y: -1, scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
+        whileHover={{ x: 2, scale: 1.005 }}
+        whileTap={{ scale: 0.995 }}
         onClick={() => setSelectedMatchId(match.id)}
         className={cn(
-          "w-full text-left p-4 mb-2 rounded-xl glass-card transition-all relative border overflow-hidden flex items-center justify-between h-20",
+          "w-full text-left p-4 mb-2 rounded-2xl glass-card transition-all relative border overflow-hidden flex items-center justify-between h-20 group",
           isSelected 
-            ? "border-brand-green/50 bg-brand-green/5 shadow-lg" 
-            : "border-brand-border/30 hover:border-brand-green/30 hover:bg-white/5 shadow-sm"
+            ? "border-brand-green/40 bg-brand-green/5 ring-1 ring-brand-green/20" 
+            : "border-white/5 hover:border-white/10 hover:bg-white/5"
         )}
       >
-        {/* Left: Time + Logos + Names */}
-        <div className="flex items-center space-x-4 flex-1 min-w-0">
-          <div className="text-[9px] font-mono text-brand-text-muted shrink-0 bg-brand-bg-primary/50 px-2 py-1 rounded border border-white/5">
-            {new Date(match.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        <div className="flex items-center space-x-3 md:space-x-4 flex-1 min-w-0">
+          <div className="flex flex-col items-center justify-center text-[9px] md:text-[10px] font-mono font-bold text-brand-text-muted bg-black/40 w-10 h-10 xs:w-12 xs:h-12 rounded-lg md:rounded-xl border border-white/5 shrink-0">
+            <span>{new Date(match.startTime).getHours().toString().padStart(2, '0')}</span>
+            <span className="opacity-40 -mt-1">:</span>
+            <span>{new Date(match.startTime).getMinutes().toString().padStart(2, '0')}</span>
           </div>
-          <div className="flex items-center space-x-3 min-w-0">
-            <div className="flex -space-x-5 shrink-0 z-10">
-              <div className="relative group/logo cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: logos.home || match.homeLogo, leagueId: match.leagueId }); }}>
-                <TeamLogo name={match.homeTeam} logoUrl={logos.home || match.homeLogo} size="md" className="ring-2 ring-brand-bg-secondary group-hover/logo:scale-110 transition-transform" />
-              </div>
-              <div className="relative group/logo cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: logos.away || match.awayLogo, leagueId: match.leagueId }); }}>
-                <TeamLogo name={match.awayTeam} logoUrl={logos.away || match.awayLogo} size="md" className="ring-2 ring-brand-bg-secondary group-hover/logo:scale-110 transition-transform" />
-              </div>
+          <div className="flex items-center space-x-2 md:space-x-3 min-w-0">
+            <div className="flex -space-x-3 shrink-0">
+              <TeamLogo name={match.homeTeam} logoUrl={logos.home || match.homeLogo} size="md" className="w-12 h-12 md:w-14 md:h-14 ring-2 ring-brand-bg-card z-20" />
+              <TeamLogo name={match.awayTeam} logoUrl={logos.away || match.awayLogo} size="md" className="w-12 h-12 md:w-14 md:h-14 ring-2 ring-brand-bg-card z-10" />
             </div>
-            <div className="truncate flex flex-col">
-              <span className="text-[9px] font-bold text-brand-text-white truncate uppercase tracking-tighter leading-none notranslate" translate="no">{match.homeTeam}</span>
-              <span className="text-[9px] font-bold text-brand-text-white truncate uppercase tracking-tighter leading-none mt-1 notranslate" translate="no">{match.awayTeam}</span>
+            <div className="truncate flex flex-col min-w-0">
+              <span className="text-[9px] md:text-[10px] font-display font-bold text-brand-text-white truncate uppercase tracking-tight notranslate" translate="no">{match.homeTeam}</span>
+              <span className="text-[9px] md:text-[10px] font-display font-bold text-brand-text-white truncate uppercase tracking-tight notranslate opacity-60" translate="no">{match.awayTeam}</span>
             </div>
           </div>
         </div>
 
-        {/* Center: Market + Prob + Progress */}
-        <div className="flex flex-col items-center justify-center px-4 flex-1 max-w-[40%]">
-          <div className="flex items-center justify-between w-full mb-1">
-            <div className="flex items-center gap-1 min-w-0">
-              <span className="text-[8px] font-black text-brand-text-muted uppercase tracking-widest truncate">{badgeData?.label || 'BTTS'}</span>
-              {badgeData?.reasoning && (
-                <div title={badgeData.reasoning} className="shrink-0">
-                  <Info className="w-2.5 h-2.5 text-brand-blue opacity-60" />
-                </div>
-              )}
-            </div>
+        <div className="flex flex-col items-end justify-center px-4 flex-1 max-w-[35%] text-right">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-[8px] font-black text-brand-text-muted uppercase tracking-[0.2em]">{badgeData?.label || 'BTTS'}</span>
             <span className={cn(
-              "text-[9px] font-mono font-black",
-              probValue >= 70 ? "text-brand-green" : probValue >= 50 ? "text-brand-yellow" : "text-brand-text-muted"
+              "text-[11px] font-mono font-black",
+              probValue >= 75 ? "text-brand-green" : probValue >= 60 ? "text-brand-yellow" : "text-brand-text-muted"
             )}>
-              {badgeData?.conf || '0%'}
+              {probValue}%
             </span>
           </div>
-          <div className="w-full h-1.5 bg-brand-bg-primary rounded-full overflow-hidden border border-white/5">
+          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: isInView ? `${probValue}%` : 0 }}
-              transition={{ duration: 1, ease: "easeOut" }}
               className={cn(
-                "h-full rounded-full relative",
-                probValue >= 70 ? "bg-brand-green" : probValue >= 50 ? "bg-brand-yellow" : "bg-brand-text-muted"
+                "h-full rounded-full transition-all duration-1000",
+                probValue >= 75 ? "bg-brand-green shadow-[0_0_8px_rgba(74,222,128,0.4)]" : probValue >= 60 ? "bg-brand-yellow" : "bg-brand-text-muted"
               )}
-            >
-               {probValue >= 70 && <div className="absolute inset-0 bg-white/20 animate-pulse" />}
-            </motion.div>
+            />
           </div>
         </div>
 
-        {/* Right: Odds + Stars */}
-        <div className="flex flex-col items-end shrink-0 space-y-1.5 pl-2">
-          <div className="text-[10px] font-mono font-black text-brand-green bg-brand-green/5 px-1.5 py-0.5 rounded border border-brand-green/10">
-            {(match as any).odds_avg ? `@${(match as any).odds_avg.toFixed(2)}` : 'INC'}
+        <div className="flex flex-col items-end shrink-0 pl-2">
+          <div className="text-[11px] font-mono font-black text-brand-green group-hover:scale-110 transition-transform">
+            {(match as any).odds_avg ? `@${(match as any).odds_avg.toFixed(2)}` : '—'}
           </div>
-          <div className="flex space-x-0.5">
-            {badgeData?.stars.split('').map((s, i) => (
-              <div 
-                key={i} 
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  s === '⭐' ? "bg-brand-yellow shadow-[0_0_5px_rgba(251,191,36,0.5)]" : "bg-white/5"
-                )} 
-              />
+          <div className="flex gap-0.5 mt-1">
+            {badgeData?.stars.split('').map((_, i) => (
+              <div key={i} className="w-1 h-1 rounded-full bg-brand-yellow shadow-[0_0_4px_rgba(245,158,11,0.5)]" />
             ))}
           </div>
         </div>
@@ -285,136 +264,99 @@ export const EnrichedMatchCard: React.FC<EnrichedMatchCardProps> = memo(({
     <motion.button
       ref={ref}
       aria-label={ariaLabel}
-      whileHover={{ y: -2, scale: 1.01 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ scale: 1.002 }}
+      whileTap={{ scale: 0.998 }}
       onClick={() => setSelectedMatchId(match.id)}
       className={cn(
-        "group w-full text-left p-4 mb-3 rounded-2xl glass-card transition-all relative border overflow-hidden",
+        "group w-full text-left p-0 mb-4 rounded-[2rem] glass-card transition-all relative border overflow-hidden",
         isSelected 
-          ? "border-brand-green/50 bg-brand-green/5 shadow-[0_10px_30px_rgba(78,222,163,0.1)]" 
-          : "border-brand-border/30 hover:border-brand-green/30 hover:bg-white/5 shadow-md font-sans"
+          ? "border-brand-green/30 shadow-[0_20px_50px_rgba(0,0,0,0.4)] bg-brand-bg-card/90" 
+          : "border-white/5 hover:border-white/10 hover:bg-white/5 shadow-xl"
       )}
     >
-      <div className="flex justify-between items-center mb-3 w-full">
-        <div className="flex flex-row md:flex-col items-center flex-1 min-w-0 gap-3 md:gap-0 justify-start">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-brand-bg-primary rounded-2xl flex items-center justify-center p-1.5 md:p-2 shadow-inner border border-brand-border/30 shrink-0 md:mb-3 transition-transform hover:scale-110 cursor-pointer relative group/logo" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: logos.home || match.homeLogo, leagueId: match.leagueId }); }}>
-            <TeamLogo name={match.homeTeam} logoUrl={logos.home || match.homeLogo} size="lg" className="w-full h-full object-contain filter brightness-110" />
+      <div className="p-4 md:p-6 pb-2.5 md:pb-4">
+        <div className="flex justify-between items-center gap-2.5 md:gap-4">
+          <div className="flex flex-col items-center gap-1.5 md:gap-3 flex-1 min-w-0">
+             <div className="w-16 h-16 xs:w-20 xs:h-20 bg-black/30 rounded-xl md:rounded-2xl p-1.5 md:p-2.5 border border-white/5 relative group-hover:scale-110 transition-transform duration-500">
+                <TeamLogo name={match.homeTeam} logoUrl={logos.home || match.homeLogo} size="lg" className="w-full h-full object-contain" />
+             </div>
+             <span className="text-[8px] xs:text-[10px] font-display font-black text-center text-brand-text-white uppercase tracking-tighter leading-tight truncate w-full" translate="no">{match.homeTeam}</span>
           </div>
-          <span 
-            className="text-[10px] sm:text-xs md:font-black text-left md:text-center text-brand-text-white uppercase tracking-tight truncate w-full px-1 notranslate font-semibold hover:text-brand-green cursor-pointer transition-colors" 
-            translate="no"
-            onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: logos.home || match.homeLogo, leagueId: match.leagueId }); }}
-          >{match.homeTeam}</span>
-        </div>
-        
-        <div className="flex flex-col items-center px-2 shrink-0">
-          {isUpcoming && match.status === 'SCHEDULED' ? (
-             <div className="text-[9px] font-black text-brand-text-muted bg-brand-bg-secondary/50 px-2 py-0.5 rounded-full border border-brand-border/30">
-               VS
-             </div>
-          ) : (
-             <div className="flex flex-col items-center">
-               <div className="flex items-center space-x-1 sm:space-x-2 text-xl sm:text-2xl font-black text-brand-text-white tracking-tighter italic">
-                 <span className={cn(match.homeScore > match.awayScore ? "text-brand-green" : "text-brand-text-white")}>{match.homeScore}</span>
-                 <span className="text-brand-text-muted text-sm sm:text-lg font-light">-</span>
-                 <span className={cn(match.awayScore > match.homeScore ? "text-brand-green" : "text-brand-text-white")}>{match.awayScore}</span>
-               </div>
-               {match.status === 'LIVE' && (
-                 <span className="text-[8px] font-mono font-black text-brand-green animate-pulse mt-0.5">
-                   {match.currentMinute}'{match.addedTime ? `+${match.addedTime}` : ''}
-                 </span>
-               )}
-             </div>
-          )}
-        </div>
 
-        <div className="flex flex-row-reverse md:flex-col items-center flex-1 min-w-0 gap-3 md:gap-0 justify-start text-right">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-brand-bg-primary rounded-2xl flex items-center justify-center p-1.5 md:p-2 shadow-inner border border-brand-border/30 shrink-0 md:mb-3 transition-transform hover:scale-110 cursor-pointer relative group/logo" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: logos.away || match.awayLogo, leagueId: match.leagueId }); }}>
-            <TeamLogo name={match.awayTeam} logoUrl={logos.away || match.awayLogo} size="lg" className="w-full h-full object-contain filter brightness-110" />
+          <div className="flex flex-col items-center justify-center min-w-[70px] md:min-w-[80px]">
+             {isUpcoming && match.status === 'SCHEDULED' ? (
+                <div className="text-[8px] md:text-[10px] font-mono font-bold text-brand-text-muted bg-white/5 px-2 py-0.5 md:px-3 md:py-1 rounded-full border border-white/10">
+                   {new Date(match.startTime).getHours().toString().padStart(2, '0')}:{new Date(match.startTime).getMinutes().toString().padStart(2, '0')}
+                </div>
+             ) : (
+                <div className="flex flex-col items-center">
+                   <div className="flex items-center gap-1.5 md:gap-2 text-2xl md:text-3xl font-mono font-black text-brand-text-white tracking-tighter">
+                      <span className={cn(match.homeScore > match.awayScore ? "text-brand-green" : "")}>{match.homeScore}</span>
+                      <span className="text-white/20 text-xl md:text-xl md:mx-0">:</span>
+                      <span className={cn(match.awayScore > match.homeScore ? "text-brand-green" : "")}>{match.awayScore}</span>
+                   </div>
+                   {match.status === 'LIVE' && (
+                     <div className="bg-brand-green/10 px-1.5 py-0.5 rounded border border-brand-green/20 mt-0.5">
+                        <span className="text-[7px] md:text-[8px] font-mono font-black text-brand-green animate-pulse">
+                          LIVE {match.currentMinute}'
+                        </span>
+                     </div>
+                   )}
+                </div>
+             )}
           </div>
-          <span 
-            className="text-[10px] sm:text-xs md:font-black text-right md:text-center text-brand-text-white uppercase tracking-tight truncate w-full px-1 notranslate font-semibold hover:text-brand-green cursor-pointer transition-colors" 
-            translate="no"
-            onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: logos.away || match.awayLogo, leagueId: match.leagueId }); }}
-          >{match.awayTeam}</span>
+
+          <div className="flex flex-col items-center gap-1.5 md:gap-3 flex-1 min-w-0">
+             <div className="w-16 h-16 xs:w-20 xs:h-20 bg-black/30 rounded-xl md:rounded-2xl p-1.5 md:p-2.5 border border-white/5 relative group-hover:scale-110 transition-transform duration-500">
+                <TeamLogo name={match.awayTeam} logoUrl={logos.away || match.awayLogo} size="lg" className="w-full h-full object-contain" />
+             </div>
+             <span className="text-[8px] xs:text-[10px] font-display font-black text-center text-brand-text-white uppercase tracking-tighter leading-tight truncate w-full" translate="no">{match.awayTeam}</span>
+          </div>
         </div>
       </div>
 
-      {/* Stats e Indicadores */}
-      <div className="bg-brand-bg-secondary/50 rounded-xl p-3 space-y-2 border border-brand-border/20">
-        {(homeXG !== undefined || awayXG !== undefined) && !isUpcoming && (
-          <div className="space-y-1">
-            <div className="flex justify-between items-center text-[8px] font-black text-brand-text-muted uppercase px-0.5 tracking-widest">
-              <span>xG {(homeXG || 0).toFixed(2)}</span>
-              <span className="hidden md:inline">Análisis Táctico</span>
-              <span>xG {(awayXG || 0).toFixed(2)}</span>
-            </div>
-            <div className="flex h-1.5 bg-brand-bg-primary rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${((homeXG || 0.1) / (((homeXG || 0.1) + (awayXG || 0.1)))) * 100}%` }}
-                className="bg-brand-green shadow-[0_0_8px_rgba(78,222,163,0.5)] h-full" 
-              />
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${((awayXG || 0.1) / (((homeXG || 0.1) + (awayXG || 0.1)))) * 100}%` }}
-                className="bg-brand-red shadow-[0_0_8px_rgba(255,122,115,0.5)] h-full" 
-              />
-            </div>
+      <div className="px-6 py-4 bg-black/20 border-t border-white/5 space-y-3">
+        {!isUpcoming && match.status === 'LIVE' && (
+          <div className="relative h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+             <motion.div 
+               className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_8px_#fff] z-10"
+               animate={{ left: `${50 + ((stats?.momentum_score || 0) / 2)}%` }}
+               transition={{ type: "spring", damping: 15 }}
+             />
+             <div className="absolute inset-0 bg-gradient-to-r from-brand-red/20 via-transparent to-brand-green/20" />
           </div>
         )}
 
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col items-start">
-            <div className="text-[7px] text-brand-text-muted font-bold uppercase mb-1">{homeFormStr.split('|')[0] || ''}</div>
-            <div className="flex items-center space-x-1">
+        <div className="flex items-center justify-between text-[8px] font-mono font-bold text-brand-text-muted px-1">
+           <div className="flex gap-1">
               {(homeFormStr.split('|')[1] || '').split('').map((f, i) => (
-                <div 
-                  key={i} 
-                  className={cn(
-                    "w-2 h-2 rounded-full",
-                    f === 'W' ? "bg-brand-green" : f === 'L' ? "bg-brand-red" : "bg-brand-yellow"
-                  )} 
-                />
+                <div key={i} className={cn("w-1.5 h-1.5 rounded-full", f === 'W' ? "bg-brand-green" : f === 'L' ? "bg-brand-red" : "bg-brand-yellow")} />
               ))}
-            </div>
-          </div>
-          
-          <div className="text-[8px] text-brand-text-muted font-mono bg-black/20 px-2 py-0.5 rounded border border-brand-border/30">
-             {isUpcoming ? formatearFechaHora(match.startTime) : (match.status === 'FINISHED' ? 'FINALIZADO' : 'EN JUEGO')}
-          </div>
+           </div>
+           
+           <div className="uppercase tracking-[0.2em]">
+              {isUpcoming ? formatearFechaHora(match.startTime) : (match.status === 'FINISHED' ? 'Finalizado' : 'En Curso')}
+           </div>
 
-          <div className="flex flex-col items-end">
-            <div className="text-[7px] text-brand-text-muted font-bold uppercase mb-1">{awayFormStr.split('|')[0] || ''}</div>
-            <div className="flex items-center space-x-1">
+           <div className="flex gap-1">
               {(awayFormStr.split('|')[1] || '').split('').map((f, i) => (
-                <div 
-                  key={i} 
-                  className={cn(
-                    "w-2 h-2 rounded-full",
-                    f === 'W' ? "bg-brand-green" : f === 'L' ? "bg-brand-red" : "bg-brand-yellow"
-                  )} 
-                />
+                <div key={i} className={cn("w-1.5 h-1.5 rounded-full", f === 'W' ? "bg-brand-green" : f === 'L' ? "bg-brand-red" : "bg-brand-yellow")} />
               ))}
-            </div>
-          </div>
+           </div>
         </div>
-        
-        {goalStreakText && (
-          <div className={cn("text-[8px] font-bold text-center py-1 rounded-lg bg-black/20 border border-brand-border/30", goalStreakColor)}>
-            {goalStreakText}
-          </div>
-        )}
       </div>
 
       {badgeData && (
         <div className={cn(
-          "absolute top-0 right-0 px-3 py-1 rounded-bl-xl text-[8px] font-bold uppercase tracking-widest shadow-lg border-l border-b border-white/10",
-          badgeData.bgClass
+          "absolute top-2.5 right-2.5 md:top-4 md:right-4 px-2 py-0.5 md:px-2.5 md:py-1 rounded-lg md:rounded-xl text-[7px] xs:text-[9px] font-black uppercase tracking-widest border shadow-lg",
+          badgeData.bgClass === 'bg-brand-green text-black' 
+            ? "bg-brand-green/20 border-brand-green/30 text-brand-green" 
+            : "bg-brand-yellow/20 border-brand-yellow/30 text-brand-yellow"
         )}>
-          {badgeData.label} {badgeData.stars}
+          {badgeData.label} <span className="hidden xs:inline">{badgeData.stars}</span>
         </div>
       )}
     </motion.button>
   );
+
 });

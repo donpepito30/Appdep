@@ -140,8 +140,13 @@ function App() {
         activeView === id ? "bg-brand-green/10 text-brand-green" : "text-brand-text-muted hover:text-brand-text-white hover:bg-white/5"
       )}
     >
-      <Icon className={cn("w-5 h-5 md:mb-1 transition-all duration-300", activeView === id ? "scale-110 drop-shadow-[0_0_10px_rgba(78,222,163,0.4)]" : "group-hover:scale-110")} />
-      <span className="text-[9px] font-black uppercase tracking-tighter mt-1 md:mt-0">{label}</span>
+      <div className={cn(
+        "custom-icon-wrapper md:mb-1 transition-all duration-300",
+        activeView === id ? "bg-brand-green/20 border-brand-green/30 shadow-[0_0_15px_rgba(0,255,136,0.2)]" : ""
+      )}>
+        <Icon className={cn("w-5 h-5 transition-all duration-300", activeView === id ? "scale-110 drop-shadow-[0_0_10px_rgba(78,222,163,0.4)]" : "group-hover:scale-110")} />
+      </div>
+      <span className="text-[9px] font-black uppercase tracking-widest mt-1 md:mt-2">{label}</span>
       
       <AnimatePresence>
         {activeView === id && (
@@ -248,33 +253,22 @@ function App() {
 
   return (
     <div className="app-container h-[100dvh] bg-brand-bg-primary flex flex-col text-brand-text-white font-sans selection:bg-brand-green/30 relative">
-      {/* Real-time Synchronization Banner */}
-      <div className="w-full bg-brand-bg-card/95 backdrop-blur-md px-2 md:px-4 py-2 flex justify-between items-center border-b border-brand-green/20 shrink-0 z-[60] sticky top-0">
-        <div className="flex items-center gap-2 md:gap-3">
-          <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 text-brand-green shrink-0" />
-          <span className="font-bold text-brand-text-white text-[8px] md:text-[9px] uppercase tracking-widest hidden sm:inline">Servicio en Línea</span>
-          <span className="font-bold text-brand-text-white text-[8px] uppercase tracking-widest sm:hidden">LIVE</span>
-        </div>
-        
-        <div className="flex items-center space-x-2 md:space-x-3 px-2 md:px-4 py-1 rounded-full border border-brand-border/30 text-[8px] md:text-[9px] font-black font-mono bg-brand-bg-primary/50 grayscale">
-          <div className="flex items-center space-x-1.5 md:space-x-2">
-             <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
-             <span className="uppercase tracking-[0.2em] text-brand-text-muted">Conectado</span>
-          </div>
-        </div>
-        
-        <div className="items-center gap-4 hidden lg:flex">
-          <div className="h-1 w-1 rounded-full bg-brand-green animate-pulse"></div>
-        </div>
-      </div>
+
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative w-full min-h-0">
 
       {/* Navigation (Sidebar Desktop / Bottom Mobile) */}
-      <nav className="w-full md:w-24 h-16 md:h-full border-t md:border-r md:border-t-0 border-brand-border bg-brand-bg-secondary flex flex-row md:flex-col items-center justify-around md:justify-start md:py-10 md:space-y-8 z-[100] order-last md:order-first shrink-0 relative mt-0">
-        <div className="hidden md:flex flex-col items-center mb-10 shrink-0">
-           <h1 className="text-2xl font-display font-black italic tracking-tighter text-brand-green rotate-[-5deg]">PB</h1>
-           <div className="w-10 h-0.5 bg-brand-green mt-1 rounded-full" />
+      <nav className="w-full md:w-20 lg:w-24 h-16 md:h-full border-t md:border-r md:border-t-0 border-brand-border bg-brand-bg-secondary flex flex-row md:flex-col items-center justify-around md:justify-start md:py-8 lg:py-10 md:space-y-6 lg:space-y-8 z-[100] order-last md:order-first shrink-0 relative mt-0 overflow-visible">
+        <div className="hidden md:flex flex-col items-center mb-6 lg:mb-10 shrink-0">
+           <div className="relative group/logo">
+             <div className="absolute inset-0 bg-brand-green/20 blur-xl rounded-full opacity-0 group-hover/logo:opacity-100 transition-opacity duration-700" />
+             <img 
+               src="/src/assets/images/app_logo_futuristic_radar_1780106234733.png" 
+               alt="Match Intel" 
+               className="w-12 h-12 relative z-10 transition-transform duration-700 group-hover/logo:rotate-[360deg]" 
+             />
+           </div>
+           <div className="w-8 h-0.5 bg-brand-green mt-4 rounded-full opacity-50" />
         </div>
         
         <NavItem id="live" icon={Activity} label="Vivo" />
@@ -289,8 +283,9 @@ function App() {
             className="flex flex-col items-center justify-center p-4 text-brand-text-muted hover:text-brand-green transition-all group w-full"
             title="Soporte y API"
           >
-            <ShieldCheck className="w-5 h-5 group-hover:scale-110 mb-1" />
-            <span className="text-[7px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Soporte</span>
+            <div className="custom-icon-wrapper mb-1">
+              <ShieldCheck className="w-5 h-5 group-hover:scale-110" />
+            </div>
           </button>
         </div>
       </nav>
@@ -334,7 +329,7 @@ function App() {
       {/* Main Panel */}
       <main className={cn(
         "flex-1 flex flex-col relative bg-brand-bg-primary min-w-0 w-full overflow-hidden",
-        activeView === 'live' && !selectedMatchId ? "hidden md:flex" : "flex"
+        activeView === 'live' && !selectedMatchId ? "hidden md:flex" : "flex h-full"
       )}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -381,18 +376,18 @@ function App() {
               <div className="flex-1 min-h-0 relative z-10 flex flex-col">
                 <div className="flex-1 w-full max-w-full flex flex-col overflow-y-auto touch-scroll min-h-0">
                   {activeView === 'live' && (
-                    <div className="flex-1 p-4 md:p-8 space-y-8 min-h-0">
+                    <div className="flex-1 p-4 md:p-6 lg:p-10 space-y-8 md:space-y-12 min-h-0 w-full max-w-7xl mx-auto">
                       {/* Probability Quick View */}
                       {topPicks.length > 0 && (
                         <div className="space-y-4">
                            <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-black uppercase tracking-widest text-brand-text-white flex items-center gap-2">
-                              <Star className="w-4 h-4 text-brand-yellow fill-brand-yellow" />
+                            <h3 className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-brand-text-white flex items-center gap-2">
+                              <Star className="w-3.5 h-3.5 text-brand-yellow fill-brand-yellow" />
                               Top Picks del Día
                             </h3>
-                            <button onClick={() => setActiveView('predictions')} className="text-[10px] font-bold text-brand-green uppercase tracking-widest hover:underline">Ver Todos</button>
+                            <button onClick={() => setActiveView('predictions')} className="text-[9px] font-bold text-brand-green uppercase tracking-widest hover:underline hover:opacity-80">Ver Todos</button>
                            </div>
-                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                           <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4">
                               {topPicks.slice(0, 4).map(m => (
                                 <button 
                                   key={m.id} 
@@ -506,7 +501,7 @@ function App() {
                     </div>
                   )}
                   {activeView === 'leagues' && (
-                    <div className="flex-1 h-full relative overflow-hidden">
+                    <div className="flex-1 h-full relative overflow-hidden min-h-0">
                       <ErrorBoundary><Suspense fallback={<SuspenseLoader />}><CompetitionView /></Suspense></ErrorBoundary>
                     </div>
                   )}

@@ -1,6 +1,6 @@
 {
-  "name": "PRECISION_BET",
-  "description": "Plataforma de análisis predictivo de alto rendimiento para cuotas, estadísticas en vivo y previas generadas por IA.",
+  "name": "MatchIntel Elite - AI Sports Analytics",
+  "description": "Professional sports intelligence platform providing real-time xG metrics, deep tactical analysis, and AI-powered match predictions for elite sports enthusiasts.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -56,6 +56,8 @@ export interface Stats {
   shotsOnTargetAway: number;
   xgHome: number;
   xgAway: number;
+  xP_home?: number; // Expected Points Home
+  xP_away?: number; // Expected Points Away
   cornersHome: number;
   cornersAway: number;
   foulsHome?: number;
@@ -80,6 +82,7 @@ export interface Stats {
   passesAway?: number;
   accuratePassesHome?: number;
   accuratePassesAway?: number;
+  momentum_score?: number; // Normalized -100 to 100
 }
 
 export interface Prediction {
@@ -95,6 +98,17 @@ export interface Prediction {
   over15Prob?: number;
   over25Prob?: number;
   over35Prob?: number;
+  valueAnalysis?: {
+    expectedRoi: number;
+    valueScore: number; // 0-10
+    marketEfficiency?: number;
+    isValue?: boolean;
+    recommendedStake?: number; // Kelly Criterion based if possible
+    market?: string;
+    odds?: number;
+    probability?: number;
+    percentage?: number;
+  };
   recommendations?: {
     favorito?: 'H' | 'A' | 'D';
     favorite_prob?: number;
