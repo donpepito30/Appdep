@@ -137,27 +137,27 @@ export function CompetitionView() {
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-0 w-full">
       {/* League Selector */}
-      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-brand-border bg-brand-bg-primary/30 overflow-x-auto md:overflow-x-hidden overflow-y-hidden md:overflow-y-auto flex flex-row md:flex-col shrink-0 touch-scroll-x md:touch-scroll">
-        <div className="p-4 space-y-4 w-full flex-none w-auto md:w-full min-w-max md:min-w-0">
-          <div className="relative group sticky left-4 md:static z-10 w-48 md:w-full">
+      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-brand-border bg-brand-bg-primary/30 overflow-hidden md:overflow-y-auto shrink-0">
+        <div className="p-3 md:p-4 flex flex-row md:flex-col items-center md:items-stretch gap-3 md:space-y-4 w-full">
+          <div className="relative group w-36 sm:w-44 md:w-full shrink-0">
             <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted group-focus-within:text-brand-green transition-colors" />
             <input 
               type="text" 
               placeholder="Buscar liga..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-brand-bg-card border border-brand-border rounded-xl py-2.5 pl-10 pr-4 text-xs text-brand-text-white focus:outline-none focus:ring-1 focus:ring-brand-green/50 transition-all"
+              className="w-full bg-brand-bg-card border border-brand-border rounded-xl py-2 pl-9 pr-3 text-xs text-brand-text-white focus:outline-none focus:ring-1 focus:ring-brand-green/50 transition-all placeholder:text-brand-text-muted/60"
             />
           </div>
 
-          <div className="md:space-y-1 flex flex-row md:flex-col space-x-2 md:space-x-0">
+          <div className="md:space-y-1 flex flex-row md:flex-col space-x-2 md:space-x-0 flex-1 min-w-0 overflow-x-auto md:overflow-x-visible pb-1 md:pb-0 scrollbar-none scroll-smooth">
             <h3 className="hidden md:block text-[10px] text-brand-text-muted font-bold uppercase tracking-widest px-2 mb-2 mt-4">Competiciones</h3>
             {(searchQuery ? allLeagues.filter(l => (l.name || '').toLowerCase().includes(searchQuery.toLowerCase())) : allLeagues).map(league => (
               <button
                 key={league.id}
                 onClick={() => setSelectedLeague(league)}
                 className={cn(
-                  "shrink-0 w-48 md:w-full text-left p-2 md:p-3 rounded-xl transition-all flex items-center space-x-3 group",
+                  "shrink-0 w-40 md:w-full text-left p-2 rounded-xl transition-all flex items-center space-x-2.5 group",
                   selectedLeague.id === league.id 
                     ? "bg-brand-green/10 border border-brand-green/20 ring-1 ring-brand-green/50" 
                     : "border border-transparent hover:bg-brand-bg-hover"
@@ -227,8 +227,8 @@ export function CompetitionView() {
 
                   <div className="flex items-center space-x-3 glass-card px-4 py-2.5 rounded-xl border border-brand-border/30 invisible">
                     <div className="text-right">
-                      <p className="text-[8px] text-brand-text-muted uppercase font-black tracking-[0.2em]">Live Status</p>
-                      <p className="text-[10px] text-brand-green font-black uppercase tracking-widest">Active</p>
+                      <p className="text-[8px] text-brand-text-muted uppercase font-black tracking-[0.2em]">Estado en Vivo</p>
+                      <p className="text-[10px] text-brand-green font-black uppercase tracking-widest">Activo</p>
                     </div>
                     <div className="w-2 h-2 bg-brand-green rounded-full animate-pulse shadow-[0_0_10px_rgba(78,222,163,0.8)]" />
                   </div>
@@ -237,7 +237,7 @@ export function CompetitionView() {
 
                <div className="glass-card rounded-[2rem] border border-brand-border shadow-2xl relative min-h-[400px]">
                  {loadingStandings ? (
-                   <div className="p-1 space-y-1">
+                   <div className="p-4 space-y-1">
                      {[...Array(10)].map((_, i) => (
                        <TableRowSkeleton key={i} />
                      ))}
@@ -245,20 +245,20 @@ export function CompetitionView() {
                  ) : (
                    <>
                       <div className="hidden md:block">
-                        <div className="tabla-wrapper overflow-x-auto modern-scroll">
-                          <table className="w-full text-left min-w-[700px]">
-                            <thead>
-                              <tr className="text-[10px] text-brand-text-muted uppercase font-black tracking-[0.2em] border-b border-brand-border bg-brand-bg-primary/80 italic">
-                                <th className="p-4 w-16 text-center">Pos</th>
-                                <th className="p-4">Equipo</th>
-                                <th className="p-4 text-center">PJ</th>
-                                <th className="p-4 text-center">V</th>
-                                <th className="p-4 text-center">E</th>
-                                <th className="p-4 text-center">D</th>
-                                <th className="p-4 text-center hidden md:table-cell">GF</th>
-                                <th className="p-4 text-center hidden md:table-cell">GC</th>
-                                <th className="p-4 text-center">PTS</th>
-                                <th className="p-4 text-center">Forma</th>
+                        <div className="tabla-wrapper overflow-auto modern-scroll max-h-[720px]">
+                          <table className="w-full text-left min-w-[700px] border-separate border-spacing-0">
+                            <thead className="sticky top-0 z-20">
+                              <tr className="text-[10px] text-brand-text-muted uppercase font-black tracking-[0.2em] bg-brand-bg-secondary/95 backdrop-blur-md italic">
+                                <th className="p-4 w-16 text-center border-b border-brand-border">Pos</th>
+                                <th className="p-4 border-b border-brand-border">Equipo</th>
+                                <th className="p-4 text-center border-b border-brand-border">PJ</th>
+                                <th className="p-4 text-center border-b border-brand-border">V</th>
+                                <th className="p-4 text-center border-b border-brand-border">E</th>
+                                <th className="p-4 text-center border-b border-brand-border">D</th>
+                                <th className="p-4 text-center border-b border-brand-border hidden md:table-cell">GF</th>
+                                <th className="p-4 text-center border-b border-brand-border hidden md:table-cell">GC</th>
+                                <th className="p-4 text-center border-b border-brand-border">PTS</th>
+                                <th className="p-4 text-center border-b border-brand-border">Forma</th>
                               </tr>
                             </thead>
                     <tbody className="text-sm">

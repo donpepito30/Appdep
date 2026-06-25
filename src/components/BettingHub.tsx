@@ -14,7 +14,7 @@ export function BettingHub() {
         </h2>
         <div className="flex items-center space-x-2 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-brand-green text-black shadow-lg">
           <Target className="w-5 h-5" />
-          <span>Value Bets</span>
+          <span>Apuestas de Valor</span>
         </div>
       </div>
 

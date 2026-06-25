@@ -117,7 +117,7 @@ export function TVGuideView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 scroll-smooth touch-scroll pb-32">
+      <div className="flex-1 p-6 md:p-8 scroll-smooth pb-32">
         <AnimatePresence mode="wait">
           {loading ? (
             <motion.div 
@@ -148,21 +148,20 @@ export function TVGuideView() {
                   <h3 className="text-lg font-black text-brand-text-white uppercase tracking-tight mb-1">{channel.name}</h3>
                   <p className="text-[10px] text-brand-text-muted font-medium mb-4 uppercase tracking-tighter">Señal disponible</p>
                   
-                  {channel.link ? (
-                    <a 
-                      href={channel.link} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="mt-2 flex items-center justify-center gap-2 w-full py-3 bg-brand-green/10 text-brand-green rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-green hover:text-black transition-all"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Sitio Oficial
-                    </a>
-                  ) : (
-                    <div className="mt-2 text-center py-3 bg-brand-bg-primary/50 text-brand-text-muted rounded-xl text-[9px] font-bold uppercase tracking-widest border border-white/5">
-                      Sin enlace oficial
-                    </div>
-                  )}
+                  <a 
+                    href={channel.link || `https://www.google.com/search?q=${encodeURIComponent(channel.name + ' ver en vivo online')}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className={cn(
+                      "mt-2 flex items-center justify-center gap-2 w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                      channel.link 
+                        ? "bg-brand-green/10 text-brand-green hover:bg-brand-green hover:text-black" 
+                        : "bg-brand-yellow/10 text-brand-yellow hover:bg-brand-yellow hover:text-black"
+                    )}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    {channel.link ? "Sitio Oficial" : "Buscar Señal 🔍"}
+                  </a>
                 </div>
               ))}
               {channels.length === 0 && (
@@ -217,7 +216,7 @@ export function TVGuideView() {
                           <div className="text-[10px] font-black text-brand-green uppercase tracking-widest mb-1">{broadcast.channel_name}</div>
                           <div className="flex items-center justify-end gap-2">
                              <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
-                             <span className="text-[9px] text-brand-text-muted font-bold uppercase tracking-tighter">HD BROADCAST</span>
+                             <span className="text-[9px] text-brand-text-muted font-bold uppercase tracking-tighter">TRANSMISIÓN HD</span>
                           </div>
                        </div>
                        
@@ -227,13 +226,20 @@ export function TVGuideView() {
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="p-4 bg-brand-green/10 text-brand-green rounded-2xl hover:bg-brand-green hover:text-black transition-all shadow-lg"
+                            title="Ver transmisión oficial"
                           >
                             <ExternalLink className="w-5 h-5" />
                           </a>
                        ) : (
-                          <div className="p-4 bg-brand-bg-primary text-brand-text-muted rounded-2xl border border-white/5">
-                            <Tv className="w-5 h-5 opacity-40" />
-                          </div>
+                          <a 
+                            href={`https://www.google.com/search?q=${encodeURIComponent(broadcast.home_team + ' vs ' + broadcast.away_team + ' en vivo ' + broadcast.channel_name)}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-4 bg-brand-yellow/10 text-brand-yellow rounded-2xl hover:bg-brand-yellow hover:text-black transition-all shadow-lg border border-brand-yellow/20"
+                            title="Buscar transmisión alternativa 🔍"
+                          >
+                            <ExternalLink className="w-5 h-5" />
+                          </a>
                        )}
                     </div>
                   </div>

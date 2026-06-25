@@ -1,47 +1,200 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, ChevronDown, Sparkles, TrendingUp, Info } from 'lucide-react';
-import { Event, Prediction, cn } from '../types';
+import { Event, Prediction, EnrichedEventData, cn, TeamForm } from '../types';
 import { PredictionCard } from './PredictionCard';
 import { dayLabels } from '../hooks/useMatchStore';
 import { Footer } from './Footer';
+import { computeLocalValue, calculatePoissonModel } from '../lib/prediction';
 
 interface PredictionsViewProps {
   groupedByDay: Record<'today' | 'tomorrow' | 'dayAfter' | 'later', Event[]>;
   v2Predictions: { event: Event, prediction: Prediction }[];
+  enrichedData: Record<string, EnrichedEventData>;
   dayLabels: Record<string, string>;
   onSelectMatch: (id: string) => void;
   getMarketProbabilities: (match: Event) => { market: string; label: string; prob: number }[];
+  frozenPredictions: Record<string, Prediction>;
+  teamForms: Record<string, TeamForm>;
 }
 
-export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDayLabels, onSelectMatch, getMarketProbabilities }: PredictionsViewProps) {
-  // Use prop if provided, fallback to import
+export function PredictionsView({ 
+  groupedByDay, 
+  v2Predictions, 
+  enrichedData, 
+  dayLabels: propDayLabels, 
+  onSelectMatch, 
+  getMarketProbabilities,
+  frozenPredictions,
+  teamForms
+}: PredictionsViewProps) {
   const finalDayLabels = propDayLabels || dayLabels;
   const days: Array<'today' | 'tomorrow' | 'dayAfter'> = ['today', 'tomorrow', 'dayAfter'];
 
-  // Logic to "Choose" Top Picks (highest probability or confidence)
+  // Crear mapa para buscar partidos por id de forma eficiente
+  const matchMap = useMemo(() => {
+    const map = new Map<string, Event>();
+    Object.values(groupedByDay).forEach(list => {
+      if (list) {
+        list.forEach(m => map.set(m.id, m));
+      }
+    });
+    return map;
+  }, [groupedByDay]);
+
+  // ============================================================
+  // 1. OBTENER PREDICCIÓN PARA UN PARTIDO (CONGELADA > V2 > LOCAL)
+  // ============================================================
+  const getPredictionForMatch = (matchId: string): Prediction | null => {
+    // Prioridad 1: Predicción congelada del servidor
+    if (frozenPredictions?.[matchId]) {
+      return frozenPredictions[matchId];
+    }
+    // Prioridad 2: V2 Predictions de la API (fallback)
+    const v2Match = v2Predictions.find(p => p.event.id === matchId);
+    if (v2Match?.prediction) {
+      return v2Match.prediction;
+    }
+    // Prioridad 3: Cálculo local con Poisson + Ensemble
+    const match = matchMap.get(matchId);
+    if (match && teamForms) {
+      const homeForm = teamForms[match.homeTeamId];
+      const awayForm = teamForms[match.awayTeamId];
+      if (homeForm && awayForm) {
+        const localPred = calculatePoissonModel(homeForm, awayForm);
+        return {
+          ...localPred,
+          source: 'LOCAL_POISSON'
+        };
+      }
+    }
+    return null;
+  };
+
+  // ============================================================
+  // 2. CALCULAR TOP PICKS USANDO PREDICCIONES CONGELADAS
+  // ============================================================
   const allUpcoming = [...groupedByDay.today, ...groupedByDay.tomorrow, ...groupedByDay.dayAfter];
-  const sortedPicks = allUpcoming
-    .map(match => {
-      const probs = getMarketProbabilities(match);
-      const top = probs.reduce((prev, current) => (prev.prob > current.prob) ? prev : current);
-      return { match, top };
-    })
-    .sort((a, b) => b.top.prob - a.top.prob);
 
-  const topPick = sortedPicks[0];
-  const otherTopPicks = sortedPicks.slice(1, 3);
-  const topPicks = sortedPicks.filter(p => p.top.prob > 0.75).slice(0, 3);
+  const topPicksWithValue = useMemo(() => {
+    return allUpcoming
+      .map(match => {
+        // Obtener predicción congelada
+        const pred = getPredictionForMatch(match.id);
+        if (!pred) return null;
 
+        // Obtener odds del partido
+        const odds = enrichedData?.[match.id]?.odds || (match as any).odds;
+
+        // Calcular probabilidades por mercado
+        const probs = [
+          { market: 'BTTS', label: 'Ambos Marcan', prob: pred.bttsProb || 0.5 },
+          { market: 'OVER', label: 'Over 2.5', prob: pred.over25Prob || 0.5 },
+          { market: '1X2', label: 'Local', prob: pred.homeWinProb },
+          { market: '1X2', label: 'Empate', prob: pred.drawProb },
+          { market: '1X2', label: 'Visitante', prob: pred.awayWinProb }
+        ].filter(p => p.prob > 0);
+
+        // Encontrar el mercado con mayor probabilidad
+        const top = probs.reduce((prev, current) => (prev.prob > current.prob) ? prev : current);
+
+        // Calcular valor real usando computeLocalValue
+        const valueAnalysis = computeLocalValue(
+          { homeTeam: match.homeTeam, awayTeam: match.awayTeam },
+          probs,
+          odds
+        );
+
+        // Puntuación combinada: probabilidad + bonus por valor
+        let score = top.prob;
+        if (valueAnalysis?.isValue && valueAnalysis.percentage > 8) {
+          score += 0.15; // Bonus por valor real
+        }
+
+        return {
+          match,
+          top,
+          valueAnalysis,
+          score,
+          prediction: pred
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => b.score - a.score);
+  }, [allUpcoming, frozenPredictions, enrichedData, v2Predictions]);
+
+  // Top Pick Principal (el mejor)
+  const topPick = topPicksWithValue[0] || null;
+
+  // Otros Top Picks (siguientes 2)
+  const otherTopPicks = topPicksWithValue.slice(1, 3);
+
+  // ============================================================
+  // 3. DETECTAR VALOR REAL EN TODOS LOS PARTIDOS
+  // ============================================================
+  const hasRealValue = useMemo(() => {
+    return allUpcoming.some(match => {
+      const pred = getPredictionForMatch(match.id);
+      if (!pred) return false;
+      
+      const odds = enrichedData?.[match.id]?.odds || (match as any).odds;
+      if (!odds) return false;
+
+      const probs = [
+        { market: 'BTTS', label: 'Ambos Marcan', prob: pred.bttsProb || 0.5 },
+        { market: 'OVER', label: 'Over 2.5', prob: pred.over25Prob || 0.5 },
+        { market: '1X2', label: 'Local', prob: pred.homeWinProb }
+      ].filter(p => p.prob > 0);
+
+      const value = computeLocalValue(
+        { homeTeam: match.homeTeam, awayTeam: match.awayTeam },
+        probs,
+        odds
+      );
+
+      return value?.isValue === true && value.percentage > 8;
+    });
+  }, [allUpcoming, frozenPredictions, enrichedData]);
+
+  // ============================================================
+  // 4. FUNCIÓN PARA OBTENER PROBABILIDADES DE MERCADO (CONSISTENTE)
+  // ============================================================
+  const getMarketProbsForMatch = (match: Event) => {
+    const pred = getPredictionForMatch(match.id);
+    if (!pred) {
+      // Fallback: usar getMarketProbabilities (comportamiento anterior)
+      return getMarketProbabilities(match);
+    }
+
+    const hProb = pred.homeWinProb || 0;
+    const dProb = pred.drawProb || 0;
+    const aProb = pred.awayWinProb || 0;
+    const win1X2 = Math.max(hProb, dProb, aProb);
+    const label1X2 = hProb >= Math.max(dProb, aProb) ? 'Local' : (aProb >= dProb ? 'Visitante' : 'Empate');
+
+    return [
+      { market: 'BTTS', label: 'Ambos Marcan', prob: pred.bttsProb || 0.5 },
+      { market: 'OVER', label: 'Over 2.5', prob: pred.over25Prob || 0.5 },
+      { market: 'OVER15', label: 'Over 1.5', prob: pred.over15Prob || 0.7 },
+      { market: 'OVER35', label: 'Over 3.5', prob: pred.over35Prob || 0.2 },
+      { market: '1X2', label: label1X2, prob: win1X2 }
+    ].sort((a, b) => b.prob - a.prob);
+  };
+
+  // ============================================================
+  // 5. FORMATEAR FECHA
+  // ============================================================
   const getFormattedDate = (category: string) => {
     const now = new Date();
     const target = new Date(now);
     if (category === 'tomorrow') target.setDate(now.getDate() + 1);
     if (category === 'dayAfter') target.setDate(now.getDate() + 2);
-    
     return target.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
   };
 
+  // ============================================================
+  // 6. RENDER - ESTADO DE CARGA
+  // ============================================================
   if (!groupedByDay || (groupedByDay.today.length === 0 && groupedByDay.tomorrow.length === 0 && groupedByDay.dayAfter.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -53,33 +206,39 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
     );
   }
 
+  // ============================================================
+  // 7. RENDER - PRINCIPAL
+  // ============================================================
   return (
     <div className="space-y-12 pb-20">
-      {/* Header Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="glass-card p-6 rounded-[2rem] border border-brand-border/40 bg-brand-bg-primary/20 lg:col-span-2">
-          <div className="flex items-start gap-4">
-            <div className="custom-icon-wrapper bg-brand-green/10">
-              <Sparkles className="w-6 h-6 text-brand-green" />
+      {/* HEADER INFO */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="glass-card p-6 md:p-8 rounded-[2.5rem] border border-brand-border/40 bg-gradient-to-br from-brand-bg-secondary/40 to-brand-bg-primary/20 lg:col-span-3">
+          <div className="flex flex-col md:flex-row items-start gap-6">
+            <div className="custom-icon-wrapper w-14 h-14 bg-brand-green/10 border-brand-green/20 shrink-0">
+              <Sparkles className="w-7 h-7 text-brand-green animate-pulse" />
             </div>
-            <div>
-              <h3 className="text-xl font-black text-brand-text-white uppercase tracking-tight">Pronósticos para hoy</h3>
-              <p className="text-xs text-brand-text-muted mt-2 leading-relaxed">
-                Análisis de rendimiento y métricas avanzadas para los próximos encuentros.
+            <div className="flex-1">
+              <h3 className="text-2xl font-black text-brand-text-white uppercase tracking-tight leading-none mb-3">Pronósticos para hoy</h3>
+              <p className="text-xs text-brand-text-muted leading-relaxed max-w-2xl">
+                Nuestro motor de IA procesa miles de puntos de datos históricos, momentum en vivo y heurística táctica para generar métricas de probabilidad avanzada en cada encuentro.
               </p>
-              <div className="flex gap-4 mt-6">
+              <div className="flex flex-wrap gap-8 mt-8">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Sinc</span>
-                  <span className="text-sm font-mono font-black text-brand-green">OK</span>
+                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.2em] mb-1">Sincronización</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-mono font-black text-brand-green italic">OK</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-brand-green shadow-[0_0_8px_rgba(78,222,163,0.8)] animate-pulse" />
+                  </div>
                 </div>
-                <div className="flex flex-col border-l border-brand-border pl-4">
-                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Eventos</span>
-                  <span className="text-sm font-mono font-black text-white">{allUpcoming.length}</span>
+                <div className="flex flex-col border-l border-brand-border/40 pl-8">
+                  <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-[0.2em] mb-1">Eventos Procesados</span>
+                  <span className="text-xl font-mono font-black text-white">{allUpcoming.length}</span>
                 </div>
-                {allUpcoming.some(m => v2Predictions[m.id]?.recommendations?.value_detected) && (
-                  <div className="flex flex-col border-l border-brand-border pl-4">
-                    <span className="text-[10px] font-black text-brand-red uppercase tracking-widest">Oportunidad</span>
-                    <span className="text-sm font-mono font-black text-brand-red">ALERTA</span>
+                {hasRealValue && (
+                  <div className="flex flex-col border-l border-brand-green/40 pl-8">
+                    <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.2em] mb-1">Valor Real Detectado</span>
+                    <span className="text-xl font-mono font-black text-brand-green animate-pulse">🔍 OPORTUNIDAD</span>
                   </div>
                 )}
               </div>
@@ -87,16 +246,17 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
           </div>
         </div>
 
-        <div className="glass-card p-6 rounded-[2rem] border border-brand-yellow/20 bg-brand-yellow/5 flex flex-col justify-center">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="custom-icon-wrapper w-8 h-8 scale-75 border-brand-yellow/30">
-                <TrendingUp className="w-4 h-4 text-brand-yellow" />
-              </div>
-              <span className="text-[10px] font-black text-brand-yellow uppercase tracking-widest">Tendencia del Día</span>
+        <div className="glass-card p-6 md:p-8 rounded-[2.5rem] border border-brand-yellow/20 bg-brand-yellow/[0.03] flex flex-col justify-center relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-brand-yellow/5 blur-2xl -mr-12 -mt-12 rounded-full" />
+          <div className="flex items-center gap-3 mb-4 relative">
+            <div className="custom-icon-wrapper w-8 h-8 scale-90 border-brand-yellow/30 bg-brand-yellow/5">
+              <TrendingUp className="w-4 h-4 text-brand-yellow" />
             </div>
-            <p className="text-[11px] text-brand-text-muted uppercase font-bold tracking-tight leading-normal">
-              Mercados de <span className="text-white">Goles</span> y <span className="text-white">Doble Oportunidad</span> presentan la mayor estabilidad hoy.
-            </p>
+            <span className="text-[10px] font-black text-brand-yellow uppercase tracking-[0.3em]">Tendencia</span>
+          </div>
+          <p className="text-xs text-brand-text-muted uppercase font-bold tracking-tight leading-relaxed relative">
+            Los mercados de <span className="text-white border-b border-brand-yellow/30">Goles</span> y <span className="text-white border-b border-brand-yellow/30">Doble Oportunidad</span> presentan la mayor estabilidad hoy.
+          </p>
         </div>
       </div>
 
@@ -109,6 +269,9 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
             </div>
             <h2 className="text-xl font-black text-brand-text-white tracking-wide uppercase">
               Selección <span className="text-brand-yellow italic">Principal</span>
+              {topPick.valueAnalysis?.isValue && topPick.valueAnalysis.percentage > 8 && (
+                <span className="text-brand-green text-sm ml-2 font-mono">🔥 +{topPick.valueAnalysis.percentage.toFixed(1)}% VALOR</span>
+              )}
             </h2>
           </div>
           
@@ -116,8 +279,8 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
             {(() => {
               const match = topPick.match;
               const top = topPick.top;
-              const v2Match = v2Predictions.find(p => p.event.id === match.id);
-              const probs = getMarketProbabilities(match);
+              const prediction = topPick.prediction;
+              const probs = getMarketProbsForMatch(match);
               const bttsData = probs.find(p => p.market === 'BTTS');
               const overData = probs.find(p => p.market === 'OVER');
               return (
@@ -125,7 +288,8 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
                   key={`featured-${match.id}`}
                   match={match}
                   featured={true}
-                  prediction={v2Match?.prediction}
+                  prediction={prediction}
+                  enriched={enrichedData?.[match.id]}
                   topMarket={top.label}
                   topProb={top.prob}
                   bttsProb={bttsData?.prob || 0.5}
@@ -138,7 +302,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
         </section>
       )}
 
-      {/* TOP PICKS SECTION - "Escoger los próximos partidos" */}
+      {/* TOP PICKS SECTION */}
       {otherTopPicks.length > 0 && (
         <section className="space-y-6">
           <div className="flex items-center gap-3 px-2">
@@ -150,16 +314,16 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-            {otherTopPicks.map(({ match, top }) => {
-              const v2Match = v2Predictions.find(p => p.event.id === match.id);
-              const probs = getMarketProbabilities(match);
+            {otherTopPicks.map(({ match, top, prediction, valueAnalysis }) => {
+              const probs = getMarketProbsForMatch(match);
               const bttsData = probs.find(p => p.market === 'BTTS');
               const overData = probs.find(p => p.market === 'OVER');
               return (
                 <PredictionCard
                   key={`top-${match.id}`}
                   match={match}
-                  prediction={v2Match?.prediction}
+                  prediction={prediction}
+                  enriched={enrichedData?.[match.id]}
                   topMarket={top.label}
                   topProb={top.prob}
                   bttsProb={bttsData?.prob || 0.5}
@@ -172,6 +336,7 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
         </section>
       )}
 
+      {/* DAY SECTIONS */}
       {days.map((dayKey) => {
         const matches = groupedByDay[dayKey];
         const label = finalDayLabels[dayKey];
@@ -197,9 +362,8 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
             {matches.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {matches.map((match) => {
-                  const v2Match = v2Predictions.find(p => p.event.id === match.id);
-                  const probs = getMarketProbabilities(match);
-                  // Find the market that is NOT 1X2 if possible or just use the highest one
+                  const prediction = getPredictionForMatch(match.id);
+                  const probs = getMarketProbsForMatch(match);
                   const marketData = probs.find(p => p.prob > 0.7) || probs[0];
                   const bttsData = probs.find(p => p.market === 'BTTS');
                   const overData = probs.find(p => p.market === 'OVER');
@@ -208,9 +372,10 @@ export function PredictionsView({ groupedByDay, v2Predictions, dayLabels: propDa
                     <PredictionCard
                       key={match.id}
                       match={match}
-                      prediction={v2Match?.prediction}
-                      topMarket={marketData.label}
-                      topProb={marketData.prob}
+                      prediction={prediction}
+                      enriched={enrichedData?.[match.id]}
+                      topMarket={marketData?.label || 'BTTS'}
+                      topProb={marketData?.prob || 0.5}
                       bttsProb={bttsData?.prob || 0}
                       over25Prob={overData?.prob || 0}
                       onSelect={onSelectMatch}

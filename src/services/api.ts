@@ -1,4 +1,5 @@
-import { Event, Stats, Prediction, Odds, Incident, Player, Manager, H2HHistory, Competition, MatchDetail, OddMarket, EventMetadata, LineupData, PlayerMatchStats, TVChannel, Broadcast } from '../types';
+import { Event, Stats, Prediction, Odds, Incident, Player, Manager, H2HHistory, Competition, MatchDetail, OddMarket, EventMetadata, LineupData, PlayerMatchStats, TVChannel, Broadcast, TeamForm } from '../types';
+import { alignScorelineWithProbabilities } from '../lib/prediction';
 
 const API_BASE = '/api/v2';
 
@@ -426,8 +427,66 @@ export const api = {
           const res = await fetchSeguro(path, undefined, (data) => {
             if (!data) return null;
             
+            // Handle structured Layout: { stats: { home, away } }
+            if (data.stats && data.stats.home && data.stats.away) {
+              const h = data.stats.home;
+              const a = data.stats.away;
+              
+              const toNum = (v: any, fallback = 0): number => {
+                if (v === null || v === undefined) return fallback;
+                if (typeof v === 'number') return v;
+                if (typeof v === 'object') {
+                  const inner = v.actual ?? v.value ?? v.total ?? v.pct;
+                  return typeof inner === 'number' ? inner : (inner !== undefined && inner !== null ? parseFloat(String(inner)) : fallback);
+                }
+                if (typeof v === 'string') {
+                  const clean = v.replace('%', '').trim();
+                  const parsed = parseFloat(clean);
+                  return isNaN(parsed) ? fallback : parsed;
+                }
+                return fallback;
+              };
+
+              return {
+                possessionHome: toNum(h.ball_possession ?? h.possession, 50),
+                possessionAway: toNum(a.ball_possession ?? a.possession, 50),
+                shotsHome: toNum(h.total_shots ?? h.shots, 0),
+                shotsAway: toNum(a.total_shots ?? a.shots, 0),
+                shotsOnTargetHome: toNum(h.shots_on_target ?? h.shots_on_target_avg, 0),
+                shotsOnTargetAway: toNum(a.shots_on_target ?? a.shots_on_target_avg, 0),
+                shotsOffTargetHome: toNum(h.shots_off_target, 0),
+                shotsOffTargetAway: toNum(a.shots_off_target, 0),
+                xgHome: toNum(h.xg ?? h.expected_goals, 0),
+                xgAway: toNum(a.xg ?? a.expected_goals, 0),
+                cornersHome: toNum(h.corner_kicks ?? h.corners, 0),
+                cornersAway: toNum(a.corner_kicks ?? a.corners, 0),
+                foulsHome: toNum(h.fouls, 0),
+                foulsAway: toNum(a.fouls, 0),
+                yellowCardsHome: toNum(h.yellow_cards, 0),
+                yellowCardsAway: toNum(a.yellow_cards, 0),
+                redCardsHome: toNum(h.red_cards, 0),
+                redCardsAway: toNum(a.red_cards, 0),
+                attacksHome: toNum(h.attack ?? h.attacks, 0),
+                attacksAway: toNum(a.attack ?? a.attacks, 0),
+                dangerousAttacksHome: toNum(h.dangerous_attack ?? h.dangerous_attacks, 0),
+                dangerousAttacksAway: toNum(a.dangerous_attack ?? a.dangerous_attacks, 0),
+                savesHome: toNum(h.goalkeeper_saves ?? h.saves, 0),
+                savesAway: toNum(a.goalkeeper_saves ?? a.saves, 0),
+                bigChancesHome: toNum(h.big_chances, 0),
+                bigChancesAway: toNum(a.big_chances, 0),
+                passesHome: toNum(h.passes, 0),
+                passesAway: toNum(a.passes, 0),
+                accuratePassesHome: toNum(h.accurate_passes, 0),
+                accuratePassesAway: toNum(a.accurate_passes, 0),
+                momentum_score: toNum(data.momentum ?? h.momentum, 0)
+              } as Stats;
+            }
+
             // Handle results array (array of {type: string, home: any, away: any})
-            const results = data.results || (Array.isArray(data) ? data : null);
+            const results = data.results || 
+                            (Array.isArray(data.stats) ? data.stats : null) || 
+                            (Array.isArray(data.statistics) ? data.statistics : null) || 
+                            (Array.isArray(data) ? data : null);
             
             if (results && Array.isArray(results)) {
               const stats: any = {};
@@ -572,17 +631,17 @@ export const api = {
 
   getPredictionDetailed: async (eventId: string, onUpdate?: (data: Prediction | null) => void): Promise<Prediction | null> => {
     try {
-      // Prioritize v2 endpoint
-      const res = await fetchSeguro(`eventos/${eventId}/predicción/`, onUpdate, (data) => {
+      const transformer = (data: any) => {
         if (!data) return null;
         
-        const m = data.mercados || {};
-        const scoreM = m['puntuación'] || m['puntuacion'] || {};
-        const resM = m['resultado_partido'] || {};
-        const mmM = m['más_menos'] || {};
-        const amM = m['ambos marcan'] || {};
-        const model = data.modelo || {};
-        const recs = data.recomendaciones || {};
+        const m = data.markets || {};
+        const scoreM = m.score || {};
+        const resM = m.match_result || {};
+        const mmM = m.over_under || {};
+        const amM = m.btts || {};
+        const xgM = m.expected_goals || {};
+        const model = data.modelo || data.model || {};
+        const recs = data.recomendaciones || data.recommendations || {};
 
         const parseProb = (v: any, fallback = 0) => {
           if (v === undefined || v === null) return fallback;
@@ -591,64 +650,87 @@ export const api = {
           return n > 1 ? n / 100 : n;
         };
 
+        const valAnalysis = data.analisis_valor || data.value_analysis;
+
+        const expectedHomeGoals = xgM.home !== undefined ? Number(xgM.home) : undefined;
+        const expectedAwayGoals = xgM.away !== undefined ? Number(xgM.away) : undefined;
+
         return {
-          homeWinProb: parseProb(resM.prob_local || resM.prob_1),
-          drawProb: parseProb(resM.prob_empate || resM.prob_x),
-          awayWinProb: parseProb(resM.prob_visitante || resM.prob_2),
-          scoreline: scoreM.más_probable || scoreM.scoreline || data.scoreline,
-          source: `BZZOIRO_AI_${model.versión || 'v2'}`,
-          confidence: model.confianza || 0.85,
+          homeWinProb: parseProb(resM.prob_home),
+          drawProb: parseProb(resM.prob_draw),
+          awayWinProb: parseProb(resM.prob_away),
+          scoreline: scoreM.most_likely || data.scoreline,
+          source: `BZZOIRO_AI_${model.version || 'v2'}`,
+          confidence: model.confidence || 0.85,
           btts: !!(recs.btts),
-          bttsProb: parseProb(amM.prob_sí || amM.yes),
-          over15Prob: parseProb(mmM.prob_más_15 || mmM.over_15),
-          over25Prob: parseProb(mmM.prob_más_25 || mmM.over_25),
-          over35Prob: parseProb(mmM.prob_más_35 || mmM.over_35),
-          valueAnalysis: data.analisis_valor ? {
-            expectedRoi: Number(data.analisis_valor.roi || 0),
-            valueScore: Number(data.analisis_valor.score || 0),
-            isValue: !!data.analisis_valor.es_valor,
-            recommendedStake: Number(data.analisis_valor.stake || 1),
-            market: data.analisis_valor.mercado || recs.opportunity_market,
-            odds: Number(data.analisis_valor.cuota || 0),
-            probability: parseProb(data.analisis_valor.probabilidad || 0),
-            percentage: Number(data.analisis_valor.ventaja || data.analisis_valor.percentage || data.analisis_valor.roi || 0)
+          bttsProb: parseProb(amM.prob_yes),
+          over15Prob: parseProb(mmM.prob_over_15),
+          over25Prob: parseProb(mmM.prob_over_25),
+          over35Prob: parseProb(mmM.prob_over_35),
+          expectedHomeGoals,
+          expectedAwayGoals,
+          valueAnalysis: valAnalysis ? {
+            expectedRoi: Number(valAnalysis.roi || valAnalysis.expected_roi || 0),
+            valueScore: Number(valAnalysis.score || valAnalysis.value_score || 0),
+            isValue: !!(valAnalysis.es_valor || valAnalysis.is_value),
+            recommendedStake: Number(valAnalysis.stake || valAnalysis.recommended_stake || 1),
+            market: valAnalysis.mercado || valAnalysis.market || recs.opportunity_market,
+            odds: Number(valAnalysis.cuota || valAnalysis.odds || 0),
+            probability: parseProb(valAnalysis.probabilidad || valAnalysis.probability || 0),
+            percentage: Number(valAnalysis.ventaja || valAnalysis.percentage || valAnalysis.roi || valAnalysis.roi_percentage || 0)
           } : undefined,
           recommendations: {
-            favorito: recs.favorito,
+            favorito: recs.favorito || recs.favorite,
             favorite_prob: recs.favorite_prob,
-            bet_favorite: !!recs.bet_favorite,
+            bet_favorite: !!(recs.bet_favorite || recs.recommend_favorite),
             over_15: !!recs.over_15,
             over_25: !!recs.over_25,
             over_35: !!recs.over_35,
             btts: !!recs.btts,
-            ganador: !!recs.ganador,
-            value_detected: !!(recs.bet_favorite || recs.ganador || recs.over_25 || (data.analisis_valor && data.analisis_valor.es_valor)),
+            ganador: !!recs.winner,
+            value_detected: !!(recs.bet_favorite || recs.winner || recs.over_25 || recs.value_detected || (valAnalysis && (valAnalysis.es_valor || valAnalysis.is_value))),
             opportunity_market: recs.bet_favorite ? 'Favorito con Valor' : recs.over_25 ? 'Over 2.5 Probable' : recs.btts ? 'BTTS Sí' : undefined
           }
         } as Prediction;
-      }, { silent404: true, cacheTTL: 60000 });
+      };
 
-      if (res) return res;
+      const tryFetchPrediction = async (path: string) => {
+        try {
+          return await fetchSeguro(path, onUpdate, transformer, { silent404: true, cacheTTL: 60000 });
+        } catch {
+          return null;
+        }
+      };
 
-      // Fallback to simpler predictions endpoint if v2 fails or is 404
-      return await fetchSeguro(`predictions/${eventId}`, onUpdate, (data) => {
-        if (!data) return null;
-        let p1 = Number(data.prob_home ?? data.home_win ?? 0);
-        let px = Number(data.prob_draw ?? data.draw ?? 0);
-        let p2 = Number(data.prob_away ?? data.away_win ?? 0);
-        if (p1 > 1) { p1/=100; px/=100; p2/=100; }
+      const encoded = encodeURIComponent('predicción');
+      let res = await tryFetchPrediction(`eventos/${eventId}/${encoded}/`);
 
-        return {
-          homeWinProb: p1,
-          drawProb: px,
-          awayWinProb: p2,
-          scoreline: data.scoreline || data.predicted_score,
-          source: 'BZZOIRO_V1_LEGACY',
-          confidence: 0.7,
-          btts: !!data.btts,
-          bttsProb: (data.btts_prob || 0.5) > 1 ? (data.btts_prob/100) : (data.btts_prob || 0.5),
-        } as Prediction;
-      }, { silent404: true, cacheTTL: 60000 });
+      if (!res) {
+        res = await tryFetchPrediction(`events/${eventId}/prediction/`);
+      }
+
+      if (!res) {
+        return await fetchSeguro(`predictions/${eventId}`, onUpdate, (data) => {
+          if (!data) return null;
+          let p1 = Number(data.prob_home ?? data.home_win ?? 0);
+          let px = Number(data.prob_draw ?? data.draw ?? 0);
+          let p2 = Number(data.prob_away ?? data.away_win ?? 0);
+          if (p1 > 1) { p1/=100; px/=100; p2/=100; }
+
+          return {
+            homeWinProb: p1,
+            drawProb: px,
+            awayWinProb: p2,
+            scoreline: data.scoreline || data.predicted_score,
+            source: 'BZZOIRO_V1_LEGACY',
+            confidence: 0.7,
+            btts: !!data.btts,
+            bttsProb: (data.btts_prob || 0.5) > 1 ? (data.btts_prob/100) : (data.btts_prob || 0.5),
+          } as Prediction;
+        }, { silent404: true, cacheTTL: 60000 });
+      }
+
+      return res;
     } catch {
       return null;
     }
@@ -675,20 +757,19 @@ export const api = {
 
   getV2Predictions: async (page = 1, onUpdate?: (data: { event: Event, prediction: Prediction }[]) => void): Promise<{ event: Event, prediction: Prediction }[]> => {
     try {
-      return await fetchSeguro(`predicciones/?page=${page}`, onUpdate, (data) => {
+      return await fetchSeguro(`predictions/?page=${page}`, onUpdate, (data) => {
         if (!data || !data.results) return [];
         return data.results.map((item: any) => {
           const e = item.event || {};
-          const m = item.mercados || item.markets || {};
+          const m = item.markets || {};
           
-          // Spec markets: resultado_partido, goles_esperados, más_menos, ambos marcan, puntuación
-          const resFull = m['resultado_partido'] || {};
-          const bttsMarket = m['ambos marcan'] || m['ambos_equipos_marcan'] || {};
-          const mmMarket = m['más_menos'] || m['over_under'] || {};
-          const scoreMarket = m['puntuación'] || m['puntuacion'] || {};
-          const xgMarket = m['goles_esperados'] || {};
-          const model = item.modelo || {};
-          const recs = item.recomendaciones || {};
+          const resFull = m.match_result || {};
+          const bttsMarket = m.btts || {};
+          const mmMarket = m.over_under || {};
+          const scoreMarket = m.score || {};
+          const xgMarket = m.expected_goals || {};
+          const model = item.modelo || item.model || {};
+          const recs = item.recomendaciones || item.recommendations || {};
 
           const hId = String(e.home_team_id || e.home_team?.id || '');
           const aId = String(e.away_team_id || e.away_team?.id || '');
@@ -710,8 +791,8 @@ export const api = {
             leagueId: String(e.league_id || e.league?.id || ''),
             homeLogo: getImgUrl('team', hId) || undefined,
             awayLogo: getImgUrl('team', aId) || undefined,
-            xgHome: xgMarket.local || e.xg_home,
-            xgAway: xgMarket.visitante || e.xg_away,
+            xgHome: xgMarket.home || e.xg_home,
+            xgAway: xgMarket.away || e.xg_away,
           };
 
           const parseProb = (v: any) => {
@@ -721,35 +802,55 @@ export const api = {
             return n > 1 ? n / 100 : n;
           };
 
+          const valAnalysis = item.analisis_valor || item.value_analysis;
+
+          const hp = parseProb(resFull.prob_home);
+          const dp = parseProb(resFull.prob_draw);
+          const ap = parseProb(resFull.prob_away);
+          const rawScore = scoreMarket.most_likely || '1-1';
+          const alignedScore = alignScorelineWithProbabilities(rawScore, hp, dp, ap);
+
           const prediction: Prediction = {
-            homeWinProb: parseProb(resFull.prob_local || resFull.prob_1),
-            drawProb: parseProb(resFull.prob_empate || resFull.prob_x),
-            awayWinProb: parseProb(resFull.prob_visitante || resFull.prob_2),
-            scoreline: scoreMarket.más_probable || scoreMarket.scoreline,
-            source: `BZZOIRO_AI_${model.versión || 'v2'}`,
-            confidence: model.confianza || 0.85,
+            homeWinProb: hp,
+            drawProb: dp,
+            awayWinProb: ap,
+            scoreline: alignedScore,
+            source: `BZZOIRO_AI_${model.version || 'v2'}`,
+            confidence: model.confidence || 0.85,
             btts: !!(recs.btts),
-            bttsProb: parseProb(bttsMarket.prob_sí || bttsMarket.yes || 0.5),
-            over15Prob: parseProb(mmMarket.prob_más_15 || 0.75),
-            over25Prob: parseProb(mmMarket.prob_más_25 || mmMarket.over_25 || 0.5),
-            over35Prob: parseProb(mmMarket.prob_más_35 || 0.25),
+            bttsProb: parseProb(bttsMarket.prob_yes || 0.5),
+            over15Prob: parseProb(mmMarket.prob_over_15 || 0.75),
+            over25Prob: parseProb(mmMarket.prob_over_25 || 0.5),
+            over35Prob: parseProb(mmMarket.prob_over_35 || 0.25),
+            expectedHomeGoals: xgMarket.home !== undefined ? Number(xgMarket.home) : undefined,
+            expectedAwayGoals: xgMarket.away !== undefined ? Number(xgMarket.away) : undefined,
+            valueAnalysis: valAnalysis ? {
+              expectedRoi: Number(valAnalysis.roi || valAnalysis.expected_roi || 0),
+              valueScore: Number(valAnalysis.score || valAnalysis.value_score || 0),
+              isValue: !!(valAnalysis.es_valor || valAnalysis.is_value),
+              recommendedStake: Number(valAnalysis.stake || valAnalysis.recommended_stake || 1),
+              market: valAnalysis.mercado || valAnalysis.market || recs.opportunity_market,
+              odds: Number(valAnalysis.cuota || valAnalysis.odds || 0),
+              probability: parseProb(valAnalysis.probabilidad || valAnalysis.probability || 0),
+              percentage: Number(valAnalysis.ventaja || valAnalysis.percentage || valAnalysis.roi || valAnalysis.roi_percentage || 0)
+            } : undefined,
             recommendations: {
-              favorito: recs.favorito,
+              favorito: recs.favorito || recs.favorite,
               favorite_prob: recs.favorite_prob,
-              bet_favorite: !!recs.bet_favorite,
+              bet_favorite: !!(recs.bet_favorite || recs.recommend_favorite),
               over_15: !!recs.over_15,
               over_25: !!recs.over_25,
               over_35: !!recs.over_35,
               btts: !!recs.btts,
-              ganador: !!recs.ganador,
-              value_detected: !!(recs.bet_favorite || recs.ganador || recs.over_25),
+              ganador: !!recs.winner,
+              value_detected: !!(recs.bet_favorite || recs.winner || recs.over_25 || recs.value_detected || (valAnalysis && (valAnalysis.es_valor || valAnalysis.is_value))),
               opportunity_market: recs.bet_favorite ? 'Favorito con Valor' : recs.over_25 ? 'Over 2.5 Probable' : recs.btts ? 'BTTS Sí' : undefined
             }
           };
 
           return { event, prediction };
         });
-      }, { cacheTTL: 120000 }); 
+      }, { cacheTTL: 120000 });  
     } catch {
       return [];
     }
@@ -757,9 +858,50 @@ export const api = {
 
 
 
-  getOdds: async (eventId: string, onUpdate?: (data: any) => void, options?: { signal?: AbortSignal }): Promise<OddMarket | null> => {
+  getOdds: async (eventId: string, onUpdate?: (data: OddMarket | null) => void, options?: { signal?: AbortSignal }): Promise<OddMarket | null> => {
     try {
-      return await fetchSeguro(`events/${eventId}/odds`, onUpdate, (data) => data ? (data.odds || null) : null, { silent404: true, cacheTTL: 180000, signal: options?.signal }); // TTL de 3 min según documentación BSD
+      return await fetchSeguro(
+        `events/${eventId}/odds/`,
+        onUpdate,
+        (data) => {
+          if (!data) return null;
+          // La API devuelve un array de OddsItemV2Schema
+          const items: any[] = Array.isArray(data) 
+            ? data 
+            : (data.results || []);
+          if (items.length === 0) return null;
+
+          // Construir el objeto OddMarket plano desde los items
+          const odds: OddMarket = {};
+          items.forEach((item: any) => {
+            const market = item.market;
+            const outcome = item.outcome;
+            const price = Number(item.decimal_odds);
+            if (!price || isNaN(price)) return;
+
+            if (market === '1x2') {
+              if (outcome === 'HOME') odds.home_win = price;
+              else if (outcome === 'DRAW') odds.draw = price;
+              else if (outcome === 'AWAY') odds.away_win = price;
+            } else if (market === 'btts') {
+              if (outcome === 'yes') odds.btts_yes = price;
+              else if (outcome === 'no') odds.btts_no = price;
+            } else if (market === 'over_under_15') {
+              if (outcome === 'over') odds.over_15_goals = price;
+              else if (outcome === 'under') odds.under_15_goals = price;
+            } else if (market === 'over_under_25') {
+              if (outcome === 'over') odds.over_25_goals = price;
+              else if (outcome === 'under') odds.under_25_goals = price;
+            } else if (market === 'over_under_35') {
+              if (outcome === 'over') odds.over_35_goals = price;
+              else if (outcome === 'under') odds.under_35_goals = price;
+            }
+          });
+
+          return Object.keys(odds).length > 0 ? odds : null;
+        },
+        { silent404: true, cacheTTL: 180000, signal: options?.signal }
+      );
     } catch {
       return null;
     }
@@ -778,6 +920,7 @@ export const api = {
           else if (t.includes('goal')) type = 'GOAL';
 
           return {
+            ...inc,
             minute: inc.minute || inc.time || 0,
             type,
             team: inc.is_home === true || inc.team_id === inc.home_team_id ? 'HOME' : 'AWAY',
@@ -809,11 +952,32 @@ export const api = {
     }
   },
 
-  getH2H: async (t1: string, t2: string, onUpdate?: (data: H2HHistory[]) => void): Promise<H2HHistory[]> => {
+  getH2H: async (eventId: string, _t2?: string, onUpdate?: (data: H2HHistory[]) => void): Promise<H2HHistory[]> => {
     try {
-      const p1 = encodeURIComponent(t1);
-      const p2 = encodeURIComponent(t2);
-      return await fetchSeguro(`h2h/${p1}/${p2}/`, onUpdate, (data) => data ? (data.results || data.h2h || (Array.isArray(data) ? data : [])) : [], { silent404: true, cacheTTL: 86400000 }); // 24h cache for H2H
+      return await fetchSeguro(
+        `events/${eventId}/h2h/`,
+        onUpdate,
+        (data) => {
+          if (!data) return [];
+          // La API devuelve aggregate stats + recent_matches
+          const recent = data.recent_matches || data.results || 
+                         (Array.isArray(data) ? data : []);
+          return recent.map((h: any) => ({
+            date: h.event_date || h.date || '',
+            homeTeam: h.home_team || '',
+            awayTeam: h.away_team || '',
+            homeTeamId: h.home_team_id,
+            awayTeamId: h.away_team_id,
+            league: h.league_name || h.league || '',
+            homeScore: h.home_score ?? 0,
+            awayScore: h.away_score ?? 0,
+            xgHome: h.xg_home ?? 0,
+            xgAway: h.xg_away ?? 0,
+            possessionHome: h.possession_home ?? 50,
+          })) as H2HHistory[];
+        },
+        { silent404: true, cacheTTL: 86400000 }
+      );
     } catch {
       return [];
     }
@@ -926,39 +1090,39 @@ export const api = {
   getTVChannels: async (countryCode?: string, name?: string, limit = 50): Promise<TVChannel[]> => {
     try {
       const q = new URLSearchParams();
-      if (countryCode) q.append('código_de_país', countryCode);
-      if (name) q.append('nombre', name);
-      q.append('límite', limit.toString());
-      return await fetchSeguro(`canales-de-tv/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+      if (countryCode) q.append('country_code', countryCode);
+      if (name) q.append('name', name);
+      q.append('limit', limit.toString());
+      return await fetchSeguro(`tv-channels/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
     } catch { return []; }
   },
 
   getTVChannelEmissions: async (channelId: number, options?: { leagueId?: number, seasonId?: number }): Promise<Broadcast[]> => {
     try {
       const q = new URLSearchParams();
-      if (options?.leagueId) q.append('ID_liga', options.leagueId.toString());
-      if (options?.seasonId) q.append('ID_temporada', options.seasonId.toString());
-      return await fetchSeguro(`canales-de-tv/${channelId}/emisiones/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+      if (options?.leagueId) q.append('league_id', options.leagueId.toString());
+      if (options?.seasonId) q.append('season_id', options.seasonId.toString());
+      return await fetchSeguro(`tv-channels/${channelId}/broadcasts/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
     } catch { return []; }
   },
 
   getEventBroadcasts: async (eventId: string, countryCode?: string): Promise<Broadcast[]> => {
     try {
       const q = new URLSearchParams();
-      if (countryCode) q.append('código_de_país', countryCode);
-      return await fetchSeguro(`eventos/${eventId}/difusiones/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+      if (countryCode) q.append('country_code', countryCode);
+      return await fetchSeguro(`events/${eventId}/broadcasts/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
     } catch { return []; }
   },
 
   getGlobalBroadcasts: async (params: { leagueId?: number, teamId?: number, countryCode?: string, dateFrom?: string, dateTo?: string }): Promise<Broadcast[]> => {
     try {
       const q = new URLSearchParams();
-      if (params.leagueId) q.append('ID_liga', params.leagueId.toString());
-      if (params.teamId) q.append('ID_equipo', params.teamId.toString());
-      if (params.countryCode) q.append('código_de_país', params.countryCode);
-      if (params.dateFrom) q.append('fecha_desde', params.dateFrom);
-      if (params.dateTo) q.append('fecha_hasta', params.dateTo);
-      return await fetchSeguro(`difusiones/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
+      if (params.leagueId) q.append('league_id', params.leagueId.toString());
+      if (params.teamId) q.append('team_id', params.teamId.toString());
+      if (params.countryCode) q.append('country_code', params.countryCode);
+      if (params.dateFrom) q.append('date_from', params.dateFrom);
+      if (params.dateTo) q.append('date_to', params.dateTo);
+      return await fetchSeguro(`broadcasts/?${q.toString()}`, undefined, (data) => data?.results || [], { cacheTTL: 3600000 });
     } catch { return []; }
   },
 
@@ -975,10 +1139,56 @@ export const api = {
 
   compareOdds: async (eventId: string, onUpdate?: (data: any[]) => void): Promise<any[]> => {
     try {
-      return await fetchSeguro(`events/${eventId}/odds?market=compare`, onUpdate, (data) => {
+      return await fetchSeguro(`events/${eventId}/odds/comparison/`, onUpdate, (data) => {
         if (!data) return [];
         return data.results || (Array.isArray(data) ? data : []);
       }, { silent404: true, cacheTTL: 60000 });
+    } catch {
+      return [];
+    }
+  },
+
+  getPredictionsPrimaryEvents: async (): Promise<Event[]> => {
+    try {
+      const today = new Date();
+      const tomorrow = new Date();
+      tomorrow.setDate(today.getDate() + 1);
+
+      const dateFrom = today.toISOString().split('T')[0];
+      const dateTo = tomorrow.toISOString().split('T')[0];
+
+      return await fetchSeguro(`events/?status=notstarted&date_from=${dateFrom}&date_to=${dateTo}&limit=100`, undefined, (data) => {
+        if (!data) return [];
+        const rawEvents = data.results || data.events || (Array.isArray(data) ? data : []);
+        return rawEvents.map((e: any) => {
+          const hId = String(e.home_team_id || e.home_team?.id || e.homeTeamId || '');
+          const aId = String(e.away_team_id || e.away_team?.id || e.awayTeamId || '');
+          const hLogo = e.home_team?.logo_url || e.home_team_logo || e.homeTeamLogo;
+          const aLogo = e.away_team?.logo_url || e.away_team_logo || e.awayTeamLogo;
+          const hName = e.home_team?.name || e.home_team_name || e.home_team || e.homeTeam || 'Unknown Home';
+          const aName = e.away_team?.name || e.away_team_name || e.away_team || e.awayTeam || 'Unknown Away';
+
+          updateTeamCache(hId, hName, hLogo);
+          updateTeamCache(aId, aName, aLogo);
+
+          return {
+            id: String(e.id),
+            homeTeam: nameCache[hId] || hName,
+            awayTeam: nameCache[aId] || aName,
+            homeScore: e.home_score ?? 0,
+            awayScore: e.away_score ?? 0,
+            startTime: e.event_date || e.start_time || e.startTime || e.date || new Date().toISOString(),
+            status: 'SCHEDULED',
+            leagueName: e.competition?.name || e.league?.name || e.leagueName || 'Desconocido',
+            leagueId: String(e.league_id || e.league?.id || e.competition?.id || e.competition_id || ''),
+            homeLogo: hLogo,
+            awayLogo: aLogo,
+            homeTeamId: hId,
+            awayTeamId: aId,
+            last_updated: e.last_updated
+          };
+        });
+      }, { cacheTTL: 60000 });
     } catch {
       return [];
     }
@@ -1003,3 +1213,112 @@ export const api = {
     }
   }
 };
+
+// ============================================================
+// NUEVAS FUNCIONES PARA CONGELACIÓN Y VALIDACIÓN DE VALOR
+// ============================================================
+
+/**
+ * Convierte fixtures en TeamForm (extraído de useMatchStore para reutilización)
+ */
+export function transformToForm(fixtures: any[], teamId: string): TeamForm {
+  const recent = (fixtures || []).slice(0, 10).map(f => {
+    const isHome = String(f.homeTeamId || f.home_team_id) === String(teamId);
+    const homeScore = f.homeScore ?? f.home_score ?? 0;
+    const awayScore = f.awayScore ?? f.away_score ?? 0;
+    const goalsFor = isHome ? homeScore : awayScore;
+    const goalsAgainst = isHome ? awayScore : homeScore;
+    
+    let xgH = f.xgHome ?? f.xg_home;
+    let xgA = f.xgAway ?? f.xg_away;
+    
+    if ((xgH === undefined || xgH === null) && f.stats) {
+      const statsArr = Array.isArray(f.stats) ? f.stats : (f.stats.results || []);
+      if (Array.isArray(statsArr)) {
+        statsArr.forEach((s: any) => {
+          const type = (s.type || s.name || '').toLowerCase();
+          if (type === 'xg' || type.includes('expected goals')) {
+            xgH = s.home ?? s.value_home;
+            xgA = s.away ?? s.value_away;
+          }
+        });
+      }
+    }
+
+    const xgFor = isHome ? (xgH ?? 0) : (xgA ?? 0);
+    const xgAgainst = isHome ? (xgA ?? 0) : (xgH ?? 0);
+
+    return {
+      result: goalsFor > goalsAgainst ? 'W' as const : goalsFor === goalsAgainst ? 'D' as const : 'L' as const,
+      score: `${homeScore}-${awayScore}`,
+      opponent: isHome ? (f.awayTeamName || f.away_team_name || f.awayTeam) : (f.homeTeamName || f.home_team_name || f.homeTeam),
+      xg: typeof xgFor === 'number' ? xgFor : (Number(xgFor) || 0),
+      xgAgainst: typeof xgAgainst === 'number' ? xgAgainst : (Number(xgAgainst) || 0),
+      date: f.date || f.event_date || f.startTime,
+      goalsFor,
+      goalsAgainst
+    };
+  });
+
+  const totalMatches = recent.length || 1;
+  const avgGoalsFor = recent.reduce((acc, r) => acc + r.goalsFor, 0) / totalMatches;
+  const avgGoalsAgainst = recent.reduce((acc, r) => acc + r.goalsAgainst, 0) / totalMatches;
+  const avgXGFor = recent.reduce((acc, r) => acc + r.xg, 0) / totalMatches;
+  const avgXGAgainst = recent.reduce((acc, r) => acc + r.xgAgainst, 0) / totalMatches;
+
+  return {
+    recent,
+    avgXGFor,
+    avgXGAgainst,
+    avgGoalsFor,
+    avgGoalsAgainst
+  };
+}
+
+/**
+ * Valida si una apuesta tiene valor real comparando probabilidad estimada vs cuota de mercado
+ */
+export function computeLocalValue(
+  match: { homeTeam: string; awayTeam: string },
+  probs: { market: string; label: string; prob: number }[],
+  odds: OddMarket | null
+): { isValue: boolean; percentage: number; market: string; odds: number; probability: number } | null {
+  if (!odds || probs.length === 0) return null;
+
+  const top = probs[0];
+  if (!top || top.prob < 0.45) return null;
+
+  let odd: number | undefined;
+  switch (top.market) {
+    case 'BTTS': odd = odds.btts_yes; break;
+    case 'OVER': odd = odds.over_25_goals; break;
+    case 'OVER15': odd = odds.over_15_goals; break;
+    case 'OVER35': odd = odds.over_35_goals; break;
+    case '1X2':
+      if (top.label === 'Local') odd = odds.home_win;
+      else if (top.label === 'Visitante') odd = odds.away_win;
+      else odd = odds.draw;
+      break;
+    default: odd = undefined;
+  }
+
+  if (!odd || odd < 1.5) return null;
+
+  const impliedProb = 1 / odd;
+  const edge = top.prob - impliedProb;
+  const percentage = (edge / impliedProb) * 100;
+
+  // Solo marcar valor si el edge > 8% y la probabilidad supera 55%
+  if (percentage > 8 && top.prob > 0.55) {
+    return {
+      isValue: true,
+      percentage,
+      market: top.label,
+      odds: odd,
+      probability: top.prob,
+    };
+  }
+
+  return null;
+}
+

@@ -1,12 +1,52 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion } from 'motion/react';
-import { HelpCircle, Info, Target, TrendingUp } from 'lucide-react';
+import { HelpCircle, Info, Target, Trophy, TrendingUp } from 'lucide-react';
 import { Event, Stats } from '../types';
 import { TeamLogo } from './TeamLogo';
 import { api, logoCache, fallosLogos, nameCache, getImgUrl } from '../services/api';
 import { cn } from '../types';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 import { useTeamModal } from '../contexts/TeamModalContext';
+import { useMatchStore } from '../hooks/useMatchStore';
+
+export function formatXG(value: number | undefined | null): string {
+  if (value === undefined || value === null) return '—';
+  if (isNaN(value)) return '—';
+  if (value === 0) return '0.0';
+  return value.toFixed(1);
+}
+
+const TeamLogoPremium = ({ name, logoUrl }: { name: string, logoUrl?: string }) => {
+  const [error, setError] = useState(false);
+  const initials = (() => {
+    if (!name) return '??';
+    const parts = name?.split(' ') || [];
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  })();
+
+  if (logoUrl && !error) {
+    return (
+      <div className="w-10 h-10 rounded-full overflow-hidden border border-white/5 bg-black/40 flex items-center justify-center shrink-0">
+        <img 
+          src={logoUrl} 
+          alt={name} 
+          className="w-8 h-8 object-contain" 
+          onError={() => setError(true)}
+          referrerPolicy="no-referrer"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-full border border-brand-green/30 bg-brand-green/10 flex items-center justify-center font-display font-medium text-brand-green shrink-0 text-xs shadow-[0_0_8px_rgba(0,255,136,0.15)]">
+      <span>{initials}</span>
+    </div>
+  );
+};
 
 interface BadgeData { label: string; conf: string; bgClass: string; stars: string; reasoning?: string; }
 
@@ -29,6 +69,7 @@ export const EnrichedMatchCard: React.FC<EnrichedMatchCardProps> = memo(({
 }) => {
   const isSelected = selectedMatchId === match.id;
   const { openTeamModal } = useTeamModal();
+  const { getMarketProbabilities, v2Predictions, frozenPredictions } = useMatchStore();
   
   const [stats, setStats] = useState<Stats | null>(null);
   const [homeFormStr, setHomeFormStr] = useState<string>('');
@@ -206,6 +247,10 @@ export const EnrichedMatchCard: React.FC<EnrichedMatchCardProps> = memo(({
             : "border-white/5 hover:border-white/10 hover:bg-white/5"
         )}
       >
+        <div className={cn(
+          "absolute left-0 top-3 bottom-3 w-1 rounded-r-md transition-all duration-300",
+          isSelected ? "bg-brand-green shadow-[0_0_8px_#00ff88]" : "bg-transparent group-hover:bg-brand-green/30"
+        )} />
         <div className="flex items-center space-x-3 md:space-x-4 flex-1 min-w-0">
           <div className="flex flex-col items-center justify-center text-[9px] md:text-[10px] font-mono font-bold text-brand-text-muted bg-black/40 w-10 h-10 xs:w-12 xs:h-12 rounded-lg md:rounded-xl border border-white/5 shrink-0">
             <span>{new Date(match.startTime).getHours().toString().padStart(2, '0')}</span>
@@ -260,102 +305,206 @@ export const EnrichedMatchCard: React.FC<EnrichedMatchCardProps> = memo(({
     );
   }
 
+  const isLive = match.status === 'LIVE';
+  const isFinished = match.status === 'FINISHED';
+  const isScheduled = match.status === 'SCHEDULED' || isUpcoming;
+
+  const isToday = (() => {
+    try {
+      const matchDate = new Date(match.startTime).toDateString();
+      const todayDate = new Date().toDateString();
+      return matchDate === todayDate;
+    } catch {
+      return false;
+    }
+  })();
+
+  const formatMatchTime = (isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      const today = new Date();
+      if (d.toDateString() === today.toDateString()) {
+        return `HOY ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+      }
+      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    } catch {
+      return 'Hoy';
+    }
+  };
+
+  const leagueLogoUrl = match.leagueId ? getImgUrl('league', match.leagueId) : null;
+
+  const probs = getMarketProbabilities(match);
+  const topMarketObj = probs[0]; // { market, label, prob }
+  const probValue = Math.round((topMarketObj?.prob || 0) * 100);
+
+  const prediction = frozenPredictions?.[match.id] || v2Predictions.find(p => p.event.id === match.id)?.prediction;
+  const isValue = prediction?.recommendations?.value_detected || prediction?.valueAnalysis?.isValue === true || false;
+
+  // Stars and background classes according to specs
+  let stars = '⭐';
+  let badgeBgClass = 'bg-white/5 text-brand-text-muted border border-white/10';
+  if (probValue > 75) {
+    stars = '⭐⭐⭐';
+    badgeBgClass = 'bg-brand-green/20 text-brand-green border border-brand-green/40';
+  } else if (probValue >= 60) {
+    stars = '⭐⭐';
+    badgeBgClass = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40';
+  }
+
+  // Left Border: 3px brand-green if LIVE, brand-blue if next today, transparent if future
+  const borderLeftClass = isLive 
+    ? "border-l-[3px] !border-l-brand-green" 
+    : (isScheduled && isToday) 
+      ? "border-l-[3px] !border-l-brand-blue" 
+      : "border-l-[3px] !border-l-transparent";
+
+  const showXG = homeXG !== undefined || awayXG !== undefined;
+  const hXG = homeXG ?? 0.0;
+  const aXG = awayXG ?? 0.0;
+  const homeXgPct = (hXG + aXG) > 0 ? (hXG / (hXG + aXG)) * 100 : 50;
+  const awayXgPct = 100 - homeXgPct;
+
+  const abbreviateTeamName = (name: string) => {
+    if (!name) return "";
+    return name.length > 10 ? name.substring(0, 10) + "." : name;
+  };
+
   return (
     <motion.button
       ref={ref}
       aria-label={ariaLabel}
-      whileHover={{ scale: 1.002 }}
-      whileTap={{ scale: 0.998 }}
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
       onClick={() => setSelectedMatchId(match.id)}
       className={cn(
-        "group w-full text-left p-0 mb-4 rounded-[2rem] glass-card transition-all relative border overflow-hidden",
+        "group w-full text-left p-0 mb-4 rounded-2xl glass-card transition-all duration-200 relative border overflow-hidden flex flex-col cursor-pointer",
+        borderLeftClass,
         isSelected 
           ? "border-brand-green/30 shadow-[0_20px_50px_rgba(0,0,0,0.4)] bg-brand-bg-card/90" 
           : "border-white/5 hover:border-white/10 hover:bg-white/5 shadow-xl"
       )}
     >
-      <div className="p-4 md:p-6 pb-2.5 md:pb-4">
-        <div className="flex justify-between items-center gap-2.5 md:gap-4">
-          <div className="flex flex-col items-center gap-1.5 md:gap-3 flex-1 min-w-0">
-             <div className="w-16 h-16 xs:w-20 xs:h-20 bg-black/30 rounded-xl md:rounded-2xl p-1.5 md:p-2.5 border border-white/5 relative group-hover:scale-110 transition-transform duration-500">
-                <TeamLogo name={match.homeTeam} logoUrl={logos.home || match.homeLogo} size="lg" className="w-full h-full object-contain" />
-             </div>
-             <span className="text-[8px] xs:text-[10px] font-display font-black text-center text-brand-text-white uppercase tracking-tighter leading-tight truncate w-full" translate="no">{match.homeTeam}</span>
-          </div>
+      {/* 1. HEADER de la tarjeta */}
+      <div className="flex items-center justify-between border-b border-white/5 px-4 py-2.5 md:px-5">
+        <div className="flex items-center space-x-2">
+          {leagueLogoUrl ? (
+            <img 
+              src={leagueLogoUrl} 
+              alt="" 
+              referrerPolicy="no-referrer"
+              className="w-6 h-6 object-contain opacity-75 shrink-0"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <Trophy className="w-4 h-4 text-brand-text-muted select-none" />
+          )}
+          <span className="text-xs font-bold uppercase tracking-wider text-brand-text-muted truncate max-w-[150px] xs:max-w-none">
+            {match.leagueName}
+          </span>
+        </div>
 
-          <div className="flex flex-col items-center justify-center min-w-[70px] md:min-w-[80px]">
-             {isUpcoming && match.status === 'SCHEDULED' ? (
-                <div className="text-[8px] md:text-[10px] font-mono font-bold text-brand-text-muted bg-white/5 px-2 py-0.5 md:px-3 md:py-1 rounded-full border border-white/10">
-                   {new Date(match.startTime).getHours().toString().padStart(2, '0')}:{new Date(match.startTime).getMinutes().toString().padStart(2, '0')}
-                </div>
-             ) : (
-                <div className="flex flex-col items-center">
-                   <div className="flex items-center gap-1.5 md:gap-2 text-2xl md:text-3xl font-mono font-black text-brand-text-white tracking-tighter">
-                      <span className={cn(match.homeScore > match.awayScore ? "text-brand-green" : "")}>{match.homeScore}</span>
-                      <span className="text-white/20 text-xl md:text-xl md:mx-0">:</span>
-                      <span className={cn(match.awayScore > match.homeScore ? "text-brand-green" : "")}>{match.awayScore}</span>
-                   </div>
-                   {match.status === 'LIVE' && (
-                     <div className="bg-brand-green/10 px-1.5 py-0.5 rounded border border-brand-green/20 mt-0.5">
-                        <span className="text-[7px] md:text-[8px] font-mono font-black text-brand-green animate-pulse">
-                          LIVE {match.currentMinute}'
-                        </span>
-                     </div>
-                   )}
-                </div>
-             )}
-          </div>
-
-          <div className="flex flex-col items-center gap-1.5 md:gap-3 flex-1 min-w-0">
-             <div className="w-16 h-16 xs:w-20 xs:h-20 bg-black/30 rounded-xl md:rounded-2xl p-1.5 md:p-2.5 border border-white/5 relative group-hover:scale-110 transition-transform duration-500">
-                <TeamLogo name={match.awayTeam} logoUrl={logos.away || match.awayLogo} size="lg" className="w-full h-full object-contain" />
-             </div>
-             <span className="text-[8px] xs:text-[10px] font-display font-black text-center text-brand-text-white uppercase tracking-tighter leading-tight truncate w-full" translate="no">{match.awayTeam}</span>
-          </div>
+        <div className="flex items-center space-x-2 shrink-0">
+          {isLive ? (
+            <>
+              <span className="text-xs font-mono font-bold text-brand-green flex items-center">
+                {match.currentMinute || '45'}'
+                <span className="relative flex h-2 w-2 ml-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-green"></span>
+                </span>
+              </span>
+              <span className="bg-brand-red text-white text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 shadow-[0_0_8px_rgba(255,51,68,0.3)] animate-pulse">
+                LIVE
+              </span>
+            </>
+          ) : isFinished ? (
+            <span className="text-xs font-mono font-bold text-brand-text-muted bg-neutral-800/40 px-2 py-0.5 rounded border border-white/5 uppercase">
+              Finalizado
+            </span>
+          ) : (
+            <span className="text-xs font-mono font-bold text-brand-blue bg-brand-blue/10 px-2.5 py-0.5 rounded border border-brand-blue/20 uppercase tracking-tight">
+              {formatMatchTime(match.startTime)}
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="px-6 py-4 bg-black/20 border-t border-white/5 space-y-3">
-        {!isUpcoming && match.status === 'LIVE' && (
-          <div className="relative h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-             <motion.div 
-               className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_8px_#fff] z-10"
-               animate={{ left: `${50 + ((stats?.momentum_score || 0) / 2)}%` }}
-               transition={{ type: "spring", damping: 15 }}
-             />
-             <div className="absolute inset-0 bg-gradient-to-r from-brand-red/20 via-transparent to-brand-green/20" />
+      {/* 2. CUERPO central */}
+      <div className="flex items-center justify-between px-3 py-3 md:px-4 md:py-4 w-full">
+        {/* Home Team */}
+        <div className="flex items-center space-x-2.5 flex-1 min-w-0 justify-start">
+          <TeamLogoPremium name={match.homeTeam} logoUrl={logos.home || match.homeLogo} />
+          <span className="font-bold text-sm text-brand-text-white" translate="no">
+            {abbreviateTeamName(match.homeTeam)}
+          </span>
+        </div>
+
+        {/* Score/Time block */}
+        {isLive || isFinished ? (
+          <div className="flex items-center space-x-1 shrink-0 px-2.5">
+            <span className={cn("text-lg font-black font-mono tracking-tight", isLive ? "text-brand-green" : "text-brand-text-white")}>
+              {match.homeScore}
+            </span>
+            <span className="text-white/10 text-xs select-none">───</span>
+            <span className={cn("text-lg font-black font-mono tracking-tight", isLive ? "text-brand-green" : "text-brand-text-white")}>
+              {match.awayScore}
+            </span>
+          </div>
+        ) : (
+          <div className="text-xs font-semibold text-brand-text-white bg-white/5 px-2 py-0.5 rounded-full border border-white/10 shrink-0 mx-2 font-mono">
+            {new Date(match.startTime).getHours().toString().padStart(2, '0')}:{new Date(match.startTime).getMinutes().toString().padStart(2, '0')}
           </div>
         )}
 
-        <div className="flex items-center justify-between text-[8px] font-mono font-bold text-brand-text-muted px-1">
-           <div className="flex gap-1">
-              {(homeFormStr.split('|')[1] || '').split('').map((f, i) => (
-                <div key={i} className={cn("w-1.5 h-1.5 rounded-full", f === 'W' ? "bg-brand-green" : f === 'L' ? "bg-brand-red" : "bg-brand-yellow")} />
-              ))}
-           </div>
-           
-           <div className="uppercase tracking-[0.2em]">
-              {isUpcoming ? formatearFechaHora(match.startTime) : (match.status === 'FINISHED' ? 'Finalizado' : 'En Curso')}
-           </div>
-
-           <div className="flex gap-1">
-              {(awayFormStr.split('|')[1] || '').split('').map((f, i) => (
-                <div key={i} className={cn("w-1.5 h-1.5 rounded-full", f === 'W' ? "bg-brand-green" : f === 'L' ? "bg-brand-red" : "bg-brand-yellow")} />
-              ))}
-           </div>
+        {/* Away Team */}
+        <div className="flex items-center space-x-2.5 flex-1 min-w-0 justify-end text-right">
+          <span className="font-bold text-sm text-brand-text-white" translate="no">
+            {abbreviateTeamName(match.awayTeam)}
+          </span>
+          <TeamLogoPremium name={match.awayTeam} logoUrl={logos.away || match.awayLogo} />
         </div>
       </div>
 
-      {badgeData && (
-        <div className={cn(
-          "absolute top-2.5 right-2.5 md:top-4 md:right-4 px-2 py-0.5 md:px-2.5 md:py-1 rounded-lg md:rounded-xl text-[7px] xs:text-[9px] font-black uppercase tracking-widest border shadow-lg",
-          badgeData.bgClass === 'bg-brand-green text-black' 
-            ? "bg-brand-green/20 border-brand-green/30 text-brand-green" 
-            : "bg-brand-yellow/20 border-brand-yellow/30 text-brand-yellow"
-        )}>
-          {badgeData.label} <span className="hidden xs:inline">{badgeData.stars}</span>
+      {/* 3. BARRA xG comparativa (solo si hay datos xG) */}
+      {showXG && (
+        <div className="flex items-center gap-1 text-xs w-full px-4 pb-4 md:px-5">
+          <span className="text-brand-green font-mono w-8 text-right">
+            {formatXG(homeXG)}
+          </span>
+          <div className="flex-1 flex h-1.5 rounded-full overflow-hidden bg-white/5">
+            <div className="bg-brand-green" 
+                 style={{ width: `${homeXgPct}%` }}></div>
+            <div className="bg-blue-400" 
+                 style={{ width: `${awayXgPct}%` }}></div>
+          </div>
+          <span className="text-blue-400 font-mono w-8">
+            {formatXG(awayXG)}
+          </span>
         </div>
       )}
+
+      {/* 4. FOOTER de la tarjeta */}
+      <div className="flex items-center justify-between border-t border-white/5 px-4 py-2.5 md:px-5 bg-black/15">
+        {/* Left: Top market badge with probability + stars */}
+        <div className="flex items-center space-x-2">
+          <span className="text-xs shrink-0 select-none">{stars}</span>
+          <span className={cn("text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded border inline-flex items-center gap-1", badgeBgClass)}>
+            <span>{topMarketObj?.label || 'BTTS'} ·</span>
+            <span className="font-mono">{probValue}%</span>
+          </span>
+        </div>
+
+        {/* Right: Value badge */}
+        {isValue && (
+          <span className="flex items-center space-x-1.5 shrink-0 bg-brand-green/10 text-brand-green border border-brand-green/30 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider shadow-[0_0_10px_rgba(0,255,136,0.1)]">
+            <span>💡</span>
+            <span>Valor</span>
+          </span>
+        )}
+      </div>
     </motion.button>
   );
 

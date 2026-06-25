@@ -156,16 +156,20 @@ export function BroadcastsTab({ eventId }: { eventId: string }) {
                     </div>
                   </div>
                 </div>
-                {b.channel_link && (
-                  <a 
-                    href={b.channel_link} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="p-3 bg-brand-green/10 text-brand-green rounded-xl hover:bg-brand-green hover:text-black transition-all"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
+                <a 
+                  href={b.channel_link || `https://www.google.com/search?q=${encodeURIComponent(b.home_team + ' vs ' + b.away_team + ' en vivo ' + b.channel_name)}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={cn(
+                    "p-3 rounded-xl transition-all border",
+                    b.channel_link 
+                      ? "bg-brand-green/10 text-brand-green hover:bg-brand-green hover:text-black border-transparent" 
+                      : "bg-brand-yellow/10 text-brand-yellow hover:bg-brand-yellow hover:text-black border-brand-yellow/20"
+                  )}
+                  title={b.channel_link ? "Ver transmisión oficial" : "Buscar transmisión 🔍"}
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
               </div>
             ))}
           </div>

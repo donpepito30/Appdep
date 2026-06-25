@@ -98,6 +98,8 @@ export interface Prediction {
   over15Prob?: number;
   over25Prob?: number;
   over35Prob?: number;
+  expectedHomeGoals?: number;
+  expectedAwayGoals?: number;
   valueAnalysis?: {
     expectedRoi: number;
     valueScore: number; // 0-10
@@ -231,6 +233,10 @@ export interface PlayerMatchStats {
   expected_goals: number;
   expected_assists: number;
   total_shots: number;
+  player_name?: string;
+  name?: string;
+  position?: string;
+  pos?: string;
 }
 
 export interface TeamForm {
@@ -324,3 +330,13 @@ export interface Competition {
   logoUrl?: string;
   teams: { id: string; name: string; position: number; form: string[] }[];
 }
+
+export interface EnrichedEventData {
+  prediction: Prediction | null;
+  odds: OddMarket | null;
+  comparison: any | null;
+  standings: any | null;
+  h2h: H2HHistory[] | null;
+  lineups: LineupData | null;
+}
+

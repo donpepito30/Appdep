@@ -9,7 +9,7 @@ export function Footer() {
           <div className="flex items-center gap-3">
             <span className="text-sm font-black tracking-tighter text-brand-green italic uppercase">MatchIntel Elite</span>
             <div className="h-3 w-[1px] bg-white/10 hidden md:block" />
-            <span className="text-[9px] font-bold text-brand-text-muted uppercase tracking-[0.2em] hidden md:block">Analytics Intelligence</span>
+            <span className="text-[9px] font-bold text-brand-text-muted uppercase tracking-[0.2em] hidden md:block">Inteligencia Analítica</span>
           </div>
           <p className="text-[8px] text-brand-text-muted/60 uppercase font-medium tracking-tight text-center md:text-left max-w-sm">
             Plataforma de inteligencia deportiva. Uso bajo responsabilidad del usuario. +18 exclusivamente.
@@ -28,7 +28,7 @@ export function Footer() {
           </p>
           <div className="flex items-center gap-3">
             <div className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
-            <span className="text-[8px] font-bold text-brand-text-muted/80 tracking-widest uppercase">Nodes: Active</span>
+            <span className="text-[8px] font-bold text-brand-text-muted/80 tracking-widest uppercase">Nodos: Activos</span>
           </div>
         </div>
       </div>

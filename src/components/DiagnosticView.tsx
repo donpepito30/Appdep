@@ -79,7 +79,7 @@ export function DiagnosticView({ onClose }: { onClose: () => void }) {
         "text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest",
         item.status === 'success' ? "text-brand-green" : item.status === 'error' ? "text-brand-red" : "text-brand-text-muted"
       )}>
-        {item.status}
+        {item.status === 'success' ? 'Éxito' : item.status === 'error' ? 'Error' : item.status === 'loading' ? 'Cargando' : 'Inactivo'}
       </div>
     </div>
   );

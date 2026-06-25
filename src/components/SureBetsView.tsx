@@ -24,11 +24,10 @@ function detectSureBet(match: Event, prediction: Prediction | null, odds: OddMar
   const results: SureBet[] = [];
 
   const check = (market: string, realOdd: number | undefined, bsdProb: number, forceValue?: boolean) => {
-    // Si no hay cuota real, estimamos una cuota implícita con un ligero recargo para simular valor potencial
-    const odd = realOdd && realOdd > 1.1 ? realOdd : (1 / (bsdProb || 0.5)) * 1.12; 
+    // Si realOdd es undefined o <= 1.1, la función debe retornar sin crear ninguna SureBet
+    if (!realOdd || realOdd <= 1.1) return;
     
-    if (odd <= 1.1) return;
-    
+    const odd = realOdd;
     const implied = 1 / odd;
     const value = ((bsdProb - implied) / implied) * 100;
     
@@ -227,7 +226,7 @@ export function SureBetsView() {
   const loading = storeLoading || (loadingOdds && v2Predictions.length > 0);
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-10 touch-scroll h-full">
+    <div className="flex-1 p-4 md:p-10">
       <div className="max-w-6xl mx-auto space-y-12 pb-32">
         
         {/* Header Section */}

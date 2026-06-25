@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { Event, H2HHistory } from '../types';
+import { alignScorelineWithProbabilities } from '../lib/prediction';
 
 export interface PredictionAnalysisData {
   homeForm: string[];
@@ -56,7 +57,7 @@ export function usePredictionData(match: Event | null, enabled: boolean = true):
         const [homeFix, awayFix, h2hRaw] = await Promise.all([
           api.getFixtures(match!.homeTeamId!, 5, 120, { signal: controller.signal }),
           api.getFixtures(match!.awayTeamId!, 5, 120, { signal: controller.signal }),
-          api.getH2H(match!.homeTeamId!, match!.awayTeamId!)
+          api.getH2H(match!.id)
         ]);
 
         const getFormArray = (fix: any[], teamId: string) => {
@@ -122,6 +123,11 @@ export function usePredictionData(match: Event | null, enabled: boolean = true):
         } else {
           finalProjectedScore = projectedScore;
         }
+
+        // Apply strict alignment based on hook local probability
+        const approxAwayProb = Math.max(0.1, 1 - probLocal - 0.25);
+        const approxDrawProb = Math.max(0.1, 1 - probLocal - approxAwayProb);
+        finalProjectedScore = alignScorelineWithProbabilities(finalProjectedScore, probLocal, approxDrawProb, approxAwayProb);
 
         const h2hScores = h2hRaw.slice(0, 5);
 

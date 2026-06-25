@@ -11,6 +11,15 @@ import { generateMatchPreview } from '../lib/gemini';
 import { Footer } from './Footer';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 import { useTeamModal } from '../contexts/TeamModalContext';
+import ReactMarkdown from 'react-markdown';
+import { alignScorelineWithProbabilities } from '../lib/prediction';
+
+function formatXG(value: number | undefined | null): string {
+  if (value === undefined || value === null) return '—';
+  if (isNaN(value)) return '—';
+  if (value === 0) return '0.0';
+  return value.toFixed(1);
+}
 
 interface DashboardProps {
   match: { 
@@ -99,6 +108,38 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
   const [aiPreview, setAIPreview] = useState<string | null>(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
+  // Scrollbar monitoring state for custom high-visibility overlay scrollbar
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollStats, setScrollStats] = useState({
+    scrollTop: 0,
+    scrollHeight: 0,
+    clientHeight: 0,
+  });
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    setScrollStats({
+      scrollTop: target.scrollTop,
+      scrollHeight: target.scrollHeight,
+      clientHeight: target.clientHeight,
+    });
+  };
+
+  // Recalculate scrollbar stats when tab or match details update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (contentScrollRef.current) {
+        const target = contentScrollRef.current;
+        setScrollStats({
+          scrollTop: target.scrollTop,
+          scrollHeight: target.scrollHeight,
+          clientHeight: target.clientHeight,
+        });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [activeTab, match]);
+
   const strategyData = homeAdvancedStats && awayAdvancedStats ? {
     homeStats: { avgGoals: homeAdvancedStats.goalsPerMatch, avgAgainst: homeAdvancedStats.gaPerMatch },
     awayStats: { avgGoals: awayAdvancedStats.goalsPerMatch, avgAgainst: awayAdvancedStats.gaPerMatch },
@@ -109,13 +150,11 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
     // Load H2H if we are on H2H history or Strategy tab
     if (activeTab === 'h2h' && h2hHistory.length === 0 && !loadingH2H) {
       setLoadingH2H(true);
-      const h2hId1 = match.homeTeamId || match.homeTeam;
-      const h2hId2 = match.awayTeamId || match.awayTeam;
-      api.getH2H(h2hId1, h2hId2).then(data => {
-        setH2HHistory(data);
+      api.getH2H(match.id).then(data => {
+        setH2HHistory(data || []);
         setLoadingH2H(false);
-      }).catch(err => {
-        console.error("Error loading H2H:", err);
+      }).catch(() => {
+        setH2HHistory([]);
         setLoadingH2H(false);
       });
     }
@@ -218,20 +257,43 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
             return 'D';
           });
 
+          const injuredPlayers: { name: string; position: string; reason?: string; team: string }[] = [];
+          if (lineups?.unavailable_players) {
+            const unHome = lineups.unavailable_players.home || [];
+            unHome.forEach((p: any) => {
+              injuredPlayers.push({ name: p.name, position: p.position || p.status || 'Lesinado', reason: p.reason, team: 'home' });
+            });
+            const unAway = lineups.unavailable_players.away || [];
+            unAway.forEach((p: any) => {
+              injuredPlayers.push({ name: p.name, position: p.position || p.status || 'Lesinado', reason: p.reason, team: 'away' });
+            });
+          }
+
           generateMatchPreview(
             match.homeTeam,
             match.awayTeam,
             homeForm,
             awayForm,
             'Historial reciente sincronizado.',
-            match.id
+            match.id,
+            injuredPlayers,
+            prediction
           ).then(text => {
             setAIPreview(text);
             setIsGeneratingAI(false);
           }).catch(() => setIsGeneratingAI(false));
        }).catch(() => setIsGeneratingAI(false));
     }
-  }, [activeTab, match.homeTeam, match.awayTeam, match.homeTeamId, match.awayTeamId]);
+  }, [
+    activeTab, 
+    match.id,
+    match.homeTeam, 
+    match.awayTeam, 
+    match.homeTeamId, 
+    match.awayTeamId, 
+    lineups?.lineup_status,
+    prediction?.homeWinProb
+  ]);
 
   const getDiff = (current: number, last: number | undefined) => {
     if (last === undefined) return null;
@@ -251,17 +313,17 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
         <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
         <div className="flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-3 md:gap-8 relative z-10 w-full">
           {/* Team Home */}
-          <div className="w-full md:flex-1 flex items-center md:space-x-4 lg:space-x-6 min-w-0 order-2 md:order-1">
+          <div className="w-full md:flex-1 flex flex-col items-center md:flex-row md:justify-end gap-3 min-w-0 order-2 md:order-1">
             <div className="shrink-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: match.homeLogo, leagueId: match.leagueId }); }}>
-              <div className="w-16 h-16 xs:w-20 xs:h-20 md:w-20 md:h-20 lg:w-24 lg:h-24 bg-black/40 rounded-xl md:rounded-[2rem] p-1.5 md:p-3 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
-                <TeamLogo name={match.homeTeam} logoUrl={match.homeLogo} size="lg" className="w-full h-full object-contain" />
+              <div className="w-12 h-12 bg-black/40 rounded-xl p-1.5 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
+                <TeamLogo name={match.homeTeam} logoUrl={match.homeLogo} size="md" className="w-full h-full object-contain" />
               </div>
             </div>
-            <div className="flex flex-col min-w-0 ml-2.5 md:ml-0 notranslate" translate="no">
-              <h2 className="text-xs xs:text-base md:text-xl lg:text-3xl font-display font-black tracking-tighter text-brand-text-white truncate uppercase leading-none mb-1 md:mb-2">{match.homeTeam}</h2>
+            <div className="flex flex-col items-center md:items-end min-w-0 notranslate" translate="no">
+              <h2 className={cn("font-display font-black tracking-tight text-brand-text-white text-center whitespace-normal break-words leading-tight mb-1 max-w-[160px] sm:max-w-xs", (match.homeTeam || '').length > 12 ? 'text-xs' : 'text-sm')}>{match.homeTeam}</h2>
               <div className="flex items-center gap-1.5 md:gap-2">
                  <div className="h-2.5 md:h-3 w-[2px] bg-brand-green" />
-                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] truncate">{match.leagueName || 'Match Intel'}</span>
+                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] whitespace-normal">{match.leagueName || 'Match Intel'}</span>
               </div>
             </div>
           </div>
@@ -270,7 +332,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
           <div className="flex flex-col items-center shrink-0 order-1 md:order-2 mb-1 md:mb-0">
             <div className="flex items-center gap-4 md:gap-6 lg:gap-10">
               <div className="text-2xl xs:text-4xl md:text-6xl lg:text-7xl font-black font-display font-tabular tracking-tighter text-brand-text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                {match.homeScore} <span className="text-white/10 mx-[-4px]">:</span> {match.awayScore}
+                {match.homeScore}<span className="text-brand-text-muted/50 mx-2 md:mx-4 font-medium">-</span>{match.awayScore}
               </div>
             </div>
             {match.status === 'LIVE' && (
@@ -279,28 +341,31 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-full w-full bg-brand-red"></span>
                 </span>
-                <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] font-mono font-black text-brand-red uppercase tracking-widest">{match.currentMinute}' <span className="hidden sm:inline">EN VIVO</span></span>
+                <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] font-mono font-black text-brand-red uppercase tracking-widest whitespace-nowrap flex items-center gap-1">
+                  <span>{match.currentMinute}'</span>
+                  <span>EN VIVO</span>
+                </span>
               </div>
             )}
             {match.status === 'FINISHED' && (
               <div className="mt-1 md:mt-3 px-2 md:px-3 py-0.5 md:py-1 bg-white/5 rounded-full border border-white/10">
-                <span className="text-[7px] xs:text-[8px] md:text-[10px] uppercase font-black text-brand-text-muted tracking-[0.2em]">Finalizado</span>
+                <span className="text-[7px] xs:text-[8px] md:text-[10px] uppercase font-black text-brand-text-muted tracking-[0.2em] whitespace-nowrap">Finalizado</span>
               </div>
             )}
           </div>
 
           {/* Team Away */}
-          <div className="w-full md:flex-1 flex items-center justify-end md:space-x-4 lg:space-x-6 min-w-0 order-3">
-            <div className="flex flex-col items-end min-w-0 mr-2.5 md:mr-0 notranslate" translate="no">
-              <h2 className="text-xs xs:text-base md:text-xl lg:text-3xl font-display font-black tracking-tighter text-brand-text-white text-right truncate uppercase leading-none mb-1 md:mb-2">{match.awayTeam}</h2>
+          <div className="w-full md:flex-1 flex flex-col items-center md:items-start md:flex-row md:justify-start gap-3 min-w-0 order-3">
+            <div className="flex flex-col items-center md:items-start min-w-0 notranslate order-2 md:order-1" translate="no">
+              <h2 className={cn("font-display font-black tracking-tight text-brand-text-white text-center whitespace-normal break-words leading-tight mb-1 max-w-[160px] sm:max-w-xs", (match.awayTeam || '').length > 12 ? 'text-xs' : 'text-sm')}>{match.awayTeam}</h2>
               <div className="flex items-center gap-1.5 md:gap-2">
-                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] truncate">Visita</span>
+                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] whitespace-normal">Visita</span>
                  <div className="h-2.5 md:h-3 w-[2px] bg-brand-text-muted/30" />
               </div>
             </div>
-            <div className="shrink-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId }); }}>
-              <div className="w-16 h-16 xs:w-20 xs:h-20 md:w-20 md:h-20 lg:w-24 lg:h-24 bg-black/40 rounded-xl md:rounded-[2rem] p-1.5 md:p-3 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
-                <TeamLogo name={match.awayTeam} logoUrl={match.awayLogo} size="lg" className="w-full h-full object-contain" />
+            <div className="shrink-0 group cursor-pointer order-1 md:order-2" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId }); }}>
+              <div className="w-12 h-12 bg-black/40 rounded-xl p-1.5 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
+                <TeamLogo name={match.awayTeam} logoUrl={match.awayLogo} size="md" className="w-full h-full object-contain" />
               </div>
             </div>
           </div>
@@ -314,12 +379,12 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
       >
         <div className="flex flex-nowrap min-w-max md:min-w-0 md:justify-center w-full px-4">
           {[
-            { id: 'summary', label: 'Dashboard', icon: Activity },
-            { id: 'predictions', label: 'Predictions', icon: Zap },
-            { id: 'h2h', label: 'History', icon: Swords },
-            { id: 'stats', label: 'Analytical', icon: BarChart3 },
-            { id: 'lineups', label: 'Lineups', icon: Users },
-            { id: 'shotmap', label: 'Shot Map', icon: Crosshair }
+            { id: 'summary', label: 'Panel Principal', icon: Activity },
+            { id: 'predictions', label: 'Predicciones', icon: Zap },
+            { id: 'h2h', label: 'Historial H2H', icon: Swords },
+            { id: 'stats', label: 'Analítica Avanzada', icon: BarChart3 },
+            { id: 'lineups', label: 'Alineaciones', icon: Users },
+            { id: 'shotmap', label: 'Mapa de Tiros', icon: Crosshair }
           ].map(t => (
               <button
               key={t.id}
@@ -349,7 +414,14 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
       </div>
 
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-12 scroll-smooth touch-scroll">
+      <div className="flex-1 min-h-0 relative flex flex-col w-full overflow-hidden">
+        {/* Scrollable Body Content */}
+        <div 
+          ref={contentScrollRef}
+          onScroll={handleScroll}
+          className="flex-1 min-h-0 overflow-y-scroll p-4 md:p-6 scroll-smooth touch-scroll" 
+          style={{ paddingBottom: '80px' }}
+        >
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -664,10 +736,35 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                              </div>
                           </div>
 
-                          <div className="relative h-4 bg-white/5 rounded-full overflow-hidden p-1">
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.homeWinProb * 100}%` }} className="bg-brand-green h-full rounded-full mr-0.5" />
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.drawProb * 100}%` }} className="bg-brand-yellow h-full mr-0.5" />
-                             <motion.div initial={{ width: 0 }} animate={{ width: `${prediction.awayWinProb * 100}%` }} className="bg-brand-red h-full rounded-full" />
+                          <div className="relative h-4 bg-white/5 rounded-full overflow-hidden">
+                            {(() => {
+                              const total = (prediction.homeWinProb + prediction.drawProb + prediction.awayWinProb) || 1;
+                              const homePct = (prediction.homeWinProb / total) * 100;
+                              const drawPct = (prediction.drawProb / total) * 100;
+                              const awayPct = (prediction.awayWinProb / total) * 100;
+                              return (
+                                <div className="flex h-full w-full">
+                                  <motion.div 
+                                    initial={{ flex: 0 }} 
+                                    animate={{ flex: homePct }}
+                                    className="bg-brand-green h-full"
+                                    transition={{ duration: 1, ease: 'easeOut' }}
+                                  />
+                                  <motion.div 
+                                    initial={{ flex: 0 }} 
+                                    animate={{ flex: drawPct }}
+                                    className="bg-brand-yellow h-full"
+                                    transition={{ duration: 1, ease: 'easeOut' }}
+                                  />
+                                  <motion.div 
+                                    initial={{ flex: 0 }} 
+                                    animate={{ flex: awayPct }}
+                                    className="bg-brand-red h-full"
+                                    transition={{ duration: 1, ease: 'easeOut' }}
+                                  />
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -684,15 +781,23 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                              </div>
                              <div className="text-7xl md:text-8xl font-display font-black text-brand-text-white tracking-tighter bg-gradient-to-b from-white/10 to-transparent px-10 py-6 rounded-[3rem] border border-white/10 shadow-2xl">
                                {(() => {
-                                 if (prediction?.scoreline && prediction.scoreline !== '?-?') return prediction.scoreline;
-                                 if (match.status === 'LIVE') {
+                                 let baseScore = '';
+                                 if (prediction?.scoreline && prediction.scoreline !== '?-?') {
+                                   baseScore = prediction.scoreline;
+                                 } else if (match.status === 'LIVE') {
                                     const projHome = (match.homeScore || 0) + Math.round((match.xgHome || 0.5) * 1.5);
                                     const projAway = (match.awayScore || 0) + Math.round((match.xgAway || 0.5) * 1.5);
-                                    return `${projHome}:${projAway}`;
+                                    baseScore = `${projHome}-${projAway}`;
+                                 } else {
+                                    const homeGoals = Math.round((match.xgHome || 1.2) * 1.4);
+                                    const awayGoals = Math.round((match.xgAway || 1.0) * 1.2);
+                                    baseScore = `${homeGoals}-${awayGoals}`;
                                  }
-                                 const homeGoals = Math.round((match.xgHome || 1.2) * 1.4);
-                                 const awayGoals = Math.round((match.xgAway || 1.0) * 1.2);
-                                 return `${homeGoals}:${awayGoals}`;
+                                 
+                                 if (prediction) {
+                                   return alignScorelineWithProbabilities(baseScore, prediction.homeWinProb, prediction.drawProb, prediction.awayWinProb).replace('-', ':');
+                                 }
+                                 return baseScore.replace('-', ':');
                                })()}
                              </div>
                              <div className="flex flex-col items-center gap-2">
@@ -704,7 +809,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                              <div className="h-4 w-4 rounded-full bg-brand-green/20 flex items-center justify-center">
                                 <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="w-1.5 h-1.5 bg-brand-green rounded-full" />
                              </div>
-                             <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.3em]">Neural Prediction Engine Active</span>
+                             <span className="text-[10px] font-black text-brand-green uppercase tracking-[0.3em]">Motor de Predicción Neuronal Activo</span>
                           </div>
                         </div>
                       </div>
@@ -716,7 +821,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                           <div className="custom-icon-wrapper">
                              <BarChart3 className="w-5 h-5 text-brand-blue" />
                           </div>
-                          Focused Market Analysis
+                          Análisis de Mercado Enfocado
                        </div>
                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                           <MarketPredictionCard 
@@ -748,22 +853,24 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                           className="premium-gradient border border-white/5 p-8 rounded-[2.5rem] relative overflow-hidden group shadow-2xl"
                         >
                           <div className="absolute top-0 right-0 w-64 h-64 bg-brand-green/10 blur-[80px] -mr-32 -mt-32" />
-                          <div className="relative z-10">
-                            <div className="flex items-center gap-3 mb-4">
+                          <div className="relative z-10 flex flex-col">
+                            <div className="flex items-center gap-3 mb-5 border-b border-white/5 pb-4">
                                <div className="w-10 h-10 rounded-2xl bg-brand-green/20 flex items-center justify-center border border-brand-green/30">
                                   <Sparkles className="w-5 h-5 text-brand-green" />
-                               </div>
+                                </div>
                                <span className="text-[12px] font-black uppercase tracking-[0.4em] text-brand-green">Strategist Intel</span>
                             </div>
-                            <p className="text-xl md:text-2xl font-display font-medium text-brand-text-white leading-tight italic max-w-2xl">
-                              "{metadata?.ai_preview?.text || aiPreview}"
-                            </p>
+                            <div className="markdown-body max-h-[260px] overflow-y-auto pr-2 modern-scroll text-brand-text-white/95">
+                              <ReactMarkdown>
+                                {metadata?.ai_preview?.text || aiPreview}
+                              </ReactMarkdown>
+                            </div>
                           </div>
                         </motion.div>
                       )}
 
                       {/* Performance Center */}
-                      <div className="bg-brand-bg-card p-10 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-8">
+                      <div className="bg-brand-bg-card p-6 md:p-10 rounded-3xl md:rounded-[2.5rem] border border-white/5 shadow-2xl space-y-8">
                          <div className="flex items-center justify-between">
                             <h3 className="text-sm font-display font-black uppercase tracking-widest text-brand-text-white flex items-center gap-2">
                                <Activity className="w-5 h-5 text-brand-green" /> Performance Center
@@ -771,62 +878,82 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                             <div className="text-[10px] font-mono text-brand-text-muted bg-white/5 px-2 py-1 rounded">V2.4 REALTIME</div>
                          </div>
 
-                         <div className="grid grid-cols-3 gap-8">
-                            <div className="text-center group">
-                               <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-2 group-hover:text-brand-green transition-colors">xG Dominancia</div>
-                               <div className="text-4xl font-display font-black text-brand-text-white tracking-tighter">
-                                  {stats?.xgHome?.toFixed(2) || '0.00'}<span className="text-white/20 mx-1">:</span>{stats?.xgAway?.toFixed(2) || '0.00'}
+                         <div className="grid grid-cols-3 md:grid-cols-3 gap-2 md:gap-8">
+                            <div className="text-center group min-w-0">
+                               <div className="text-[10px] uppercase tracking-[0.15em] text-brand-text-muted mb-2 group-hover:text-brand-green transition-colors truncate font-sans">XG DOMI</div>
+                               <div className="text-lg md:text-2xl font-black text-brand-text-white tracking-tight sm:tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis">
+                                  {formatXG(stats?.xgHome)}<span className="text-white/20 mx-0.5 md:mx-1">:</span>{formatXG(stats?.xgAway)}
                                </div>
                             </div>
-                            <div className="text-center group">
-                               <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-2 group-hover:text-brand-yellow transition-colors">Posesión</div>
-                               <div className="text-4xl font-display font-black text-brand-text-white tracking-tighter">
+                            <div className="text-center group min-w-0 border-l border-white/5 pl-2 md:pl-4">
+                               <div className="text-[10px] uppercase tracking-[0.15em] text-brand-text-muted mb-2 group-hover:text-brand-yellow transition-colors truncate font-sans">POSESIÓN</div>
+                               <div className="text-lg md:text-2xl font-black text-brand-text-white tracking-tight sm:tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis">
                                   {stats?.possessionHome || 50}%
                                </div>
+                               <div className="w-16 h-1 bg-white/5 rounded-full mx-auto mt-2 overflow-hidden">
+                                  <div className="bg-brand-yellow h-full rounded-full" style={{ width: `${stats?.possessionHome || 50}%` }} />
+                               </div>
                             </div>
-                            <div className="text-center group">
-                               <div className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest mb-2 group-hover:text-brand-blue transition-colors">Precisión</div>
-                               <div className="text-4xl font-display font-black text-brand-text-white tracking-tighter">
+                            <div className="text-center group min-w-0 border-l border-white/5 pl-2 md:pl-4">
+                               <div className="text-[10px] uppercase tracking-[0.15em] text-brand-text-muted mb-2 group-hover:text-brand-blue transition-colors truncate font-sans">PRECISIÓN</div>
+                               <div className="text-lg md:text-2xl font-black text-brand-text-white tracking-tight sm:tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis">
                                   {stats?.accuratePassesHome || 82}%
+                               </div>
+                               <div className="w-16 h-1 bg-white/5 rounded-full mx-auto mt-2 overflow-hidden">
+                                  <div className="bg-brand-blue h-full rounded-full" style={{ width: `${stats?.accuratePassesHome || 82}%` }} />
                                </div>
                             </div>
                          </div>
 
-                         <div className="space-y-2">
-                            <div className="flex justify-between items-center text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
-                               <span className={cn(momentum > 0 && "text-brand-green")}>{match.homeTeam} Presión</span>
-                               <span className={cn(momentum < 0 && "text-brand-red")}>{match.awayTeam} Contra</span>
-                            </div>
-                            <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
-                               <motion.div 
-                                 className="absolute top-0 bottom-0 w-2 bg-white shadow-[0_0_15px_#fff] z-10 rounded-full"
-                                 animate={{ left: `${50 + ((momentum || 0) * 50)}%` }}
-                                 transition={{ type: "spring", damping: 12 }}
-                               />
-                               <div className="absolute inset-0 bg-gradient-to-r from-brand-red/30 via-transparent to-brand-green/30" />
-                            </div>
-                         </div>
-                      </div>
-                   </div>
+                          <div className="space-y-2">
+                             <div className="flex justify-between items-center text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
+                                <span className={cn(momentum > 0 && "text-brand-green")}>{match.homeTeam} Presión</span>
+                                <span className={cn(momentum < 0 && "text-brand-red")}>{match.awayTeam} Contra</span>
+                             </div>
+                             <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+                                <motion.div 
+                                  className="absolute top-0 bottom-0 w-2 bg-white shadow-[0_0_15px_#fff] z-10 rounded-full"
+                                  animate={{ left: `${50 + ((momentum || 0) * 50)}%` }}
+                                  transition={{ type: "spring", damping: 12 }}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-r from-brand-red/30 via-transparent to-brand-green/30" />
+                             </div>
+                             <div className="flex justify-between mt-1">
+                                <span className={cn(
+                                  "text-[9px] font-black uppercase tracking-widest transition-all",
+                                  momentum > 0.2 ? "text-brand-green opacity-100" : "text-brand-text-muted opacity-30"
+                                )}>
+                                  Dominando
+                                </span>
+                                <span className={cn(
+                                  "text-[9px] font-black uppercase tracking-widest transition-all",
+                                  momentum < -0.2 ? "text-brand-red opacity-100" : "text-brand-text-muted opacity-30"
+                                )}>
+                                  Presionando
+                                </span>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
 
                    {/* Vertical Timeline / Momentum */}
-                   <div className="flex flex-col gap-6">
-                      <div className="bg-brand-bg-card p-8 rounded-[2.5rem] border border-white/5 shadow-2xl flex-1 flex flex-col items-center justify-center text-center overflow-hidden relative">
+                   <div className="flex flex-col gap-6 w-full">
+                      <div className="bg-brand-bg-card p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl flex-1 flex flex-col items-center justify-center text-center overflow-hidden relative w-full">
                          <div className="absolute inset-0 opacity-10 flex items-center justify-center">
                             <TrendingUp className="w-48 h-48 text-brand-green scale-150" />
                          </div>
-                         <div className="relative z-10 space-y-4">
+                         <div className="relative z-10 space-y-4 w-full">
                             <h4 className="text-[11px] font-black text-brand-text-muted uppercase tracking-[0.4em]">Live Meta-Data</h4>
                             <div className="space-y-6">
                                <div>
-                                  <div className="text-5xl font-display font-black text-brand-green tracking-tighter">
+                                  <div className="text-3xl font-black text-brand-green">
                                      {((stats?.xgHome || 0) > (stats?.xgAway || 0) ? (stats?.xgHome || 0) / (stats?.xgAway || 1) : (stats?.xgAway || 0) / (stats?.xgHome || 1)).toFixed(1)}x
                                   </div>
-                                  <div className="text-[9px] font-bold text-brand-text-muted uppercase mt-1">Eficiencia de Ataque</div>
+                                  <div className="text-xs uppercase tracking-widest text-brand-text-muted mt-1">EFICIENCIA DE ATAQUE</div>
                                </div>
                                <div className="h-px w-12 bg-white/10 mx-auto" />
                                <div>
-                                  <div className="text-4xl font-display font-black text-white/40 tracking-tighter">
+                                  <div className="text-xl font-bold text-white/40">
                                      {stats?.attacksHome || 0}<span className="mx-2">/</span>{stats?.attacksAway || 0}
                                   </div>
                                   <div className="text-[9px] font-bold text-brand-text-muted uppercase mt-1">Ataques Totales</div>
@@ -846,46 +973,158 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                     <div className="h-px flex-1 bg-white/5 mx-6" />
                   </div>
                   
-                  {incidents.length === 0 ? (
-                    <div className="p-16 border border-white/5 rounded-[3rem] text-center bg-black/20">
-                      <p className="text-[11px] font-black uppercase tracking-[0.4em] text-brand-text-muted opacity-20">Monitoring match sequence...</p>
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/5 -translate-x-1/2" />
-                      <div className="space-y-6 relative z-10">
-                        {incidents.map((inc, i) => (
-                          <motion.div 
-                            key={i} 
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
-                            className={cn(
-                              "flex items-center gap-8 w-full",
-                              inc.team === 'HOME' ? "flex-row-reverse text-right pr-[50%]" : "pl-[50%]"
-                            )}
-                          >
-                            <div className={cn(
-                              "flex-1 p-5 rounded-[2rem] border bg-brand-bg-card/80 backdrop-blur-xl transition-all hover:scale-105",
-                              inc.team === 'HOME' ? "border-brand-green/20" : "border-brand-red/20"
-                            )}>
-                              <div className="text-xs font-black text-white uppercase tracking-tight">{inc.player}</div>
-                              <div className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mt-1">{inc.detail}</div>
-                            </div>
-                            <div className={cn(
-                              "w-12 h-12 rounded-full flex items-center justify-center font-mono font-black text-sm shrink-0 border-4 z-20 shadow-2xl relative",
-                              inc.team === 'HOME' ? "bg-black border-brand-green text-brand-green" : "bg-black border-brand-red text-brand-red"
-                            )}>
-                              {inc.minute}'
-                              {inc.type === 'GOAL' && (
-                                <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute -inset-4 bg-brand-green/10 rounded-full blur-xl -z-10" />
-                              )}
-                            </div>
-                          </motion.div>
-                        ))}
+                  {(() => {
+                    const visibleIncidents = incidents.filter(inc => {
+                      const isConfirmedGoal = inc.type && (inc.type.toLowerCase() === 'goal' || inc.type === 'GOAL');
+                      const hasPlayerInfo = !!((inc as any).player_name || inc.player || (inc as any).name);
+                      return isConfirmedGoal || hasPlayerInfo;
+                    });
+
+                    if (visibleIncidents.length === 0) {
+                      return (
+                        <div className="p-16 border border-white/5 rounded-[3rem] text-center bg-black/20">
+                          <p className="text-[11px] font-black uppercase tracking-[0.4em] text-brand-text-muted opacity-20">Monitoring match sequence...</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="relative">
+                        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/5 -translate-x-1/2" />
+                        <div className="space-y-6 relative z-10">
+                          {visibleIncidents.map((inc, i) => {
+                            const typeLower = (inc.type || '').toLowerCase();
+                            const isGoal = typeLower === 'goal';
+                            const isSub = typeLower === 'substitution' || typeLower === 'subst';
+                            const isCard = typeLower === 'card';
+                            const isHome = inc.team === 'HOME';
+
+                            const playerName = (inc as any).player_name 
+                              || inc.player 
+                              || (inc as any).name 
+                              || (isGoal ? 'Gol' : 'Jugador');
+
+                            let cardClasses = "flex-1 p-5 rounded-[2rem] border transition-all hover:scale-105 backdrop-blur-xl bg-brand-bg-card/80";
+
+                            if (isGoal) {
+                              cardClasses = "flex-1 p-5 rounded-[2rem] border transition-all hover:scale-105 backdrop-blur-xl bg-brand-green/15 border-brand-green/30";
+                            } else if (isCard) {
+                              const detailLC = (inc.detail || '').toLowerCase();
+                              const isRed = detailLC.includes('red') || detailLC.includes('roja') || detailLC.includes('expulsion') || detailLC.includes('expulsado');
+                              if (isRed) {
+                                cardClasses = "flex-1 p-5 rounded-[2rem] border transition-all hover:scale-105 backdrop-blur-xl bg-red-500/10 border-red-500/30";
+                              } else {
+                                cardClasses = "flex-1 p-5 rounded-[2rem] border transition-all hover:scale-105 backdrop-blur-xl bg-yellow-500/10 border-yellow-500/30";
+                              }
+                            } else {
+                              cardClasses = cn(
+                                "flex-1 p-5 rounded-[2rem] border transition-all hover:scale-105 backdrop-blur-xl bg-brand-bg-card/80",
+                                isHome ? "border-brand-green/20" : "border-brand-red/20"
+                              );
+                            }
+
+                            return (
+                              <motion.div 
+                                key={i} 
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                whileInView={{ opacity: 1, scale: 1 }}
+                                viewport={{ once: true }}
+                                className={cn(
+                                  "flex items-center gap-8 w-full",
+                                  isHome ? "flex-row-reverse text-right pr-[50%]" : "pl-[50%]"
+                                )}
+                              >
+                                <div className={cardClasses}>
+                                  {isGoal && (
+                                    <div className={cn("flex items-center gap-2", isHome ? "flex-row-reverse" : "flex-row")}>
+                                      <span className="text-base select-none shrink-0">⚽</span>
+                                      <div className={cn("flex flex-col", isHome ? "items-end text-right" : "items-start text-left")}>
+                                        <div className="font-bold text-white text-xs tracking-tight">{playerName}</div>
+                                        <div className="text-brand-green text-xs font-black uppercase tracking-wider mt-0.5">GOOAL!</div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {isSub && (() => {
+                                    let subIn = (inc as any).player_in_name 
+                                      || (inc as any).player_in?.name 
+                                      || (inc as any).player_in 
+                                      || (inc as any).playerIn 
+                                      || '';
+                                      
+                                    let subOut = (inc as any).player_out_name 
+                                      || (inc as any).player_out?.name 
+                                      || (inc as any).player_out 
+                                      || (inc as any).playerOut 
+                                      || '';
+
+                                    if (!subIn || !subOut) {
+                                      if (inc.detail && inc.detail.includes('->')) {
+                                        const parts = inc.detail.split('->');
+                                        subOut = parts[0]?.trim();
+                                        subIn = parts[1]?.trim();
+                                      } else if (inc.detail && inc.detail.includes('for')) {
+                                        const parts = inc.detail.split('for');
+                                        subIn = parts[0]?.replace(/substitution/gi, '')?.trim();
+                                        subOut = parts[1]?.trim();
+                                      } else if (inc.detail && inc.detail.includes(' - ')) {
+                                        const parts = inc.detail.split(' - ');
+                                        subOut = parts[0]?.trim();
+                                        subIn = parts[1]?.trim();
+                                      } else {
+                                        subIn = playerName;
+                                        subOut = inc.detail || 'Jugador saliente';
+                                      }
+                                    }
+
+                                    return (
+                                      <div className={cn("flex items-center gap-2", isHome ? "flex-row-reverse" : "flex-row")}>
+                                        <span className="text-base select-none shrink-0">🔄</span>
+                                        <div className={cn("flex flex-col", isHome ? "items-end text-right" : "items-start text-left")}>
+                                          <span className="text-green-400 font-bold text-xs">{subIn}</span>
+                                          <span className="text-red-400 line-through text-[11px] font-medium">{subOut}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {isCard && (() => {
+                                    const detailLC = (inc.detail || '').toLowerCase();
+                                    const isRed = detailLC.includes('red') || detailLC.includes('roja') || detailLC.includes('expulsion') || detailLC.includes('expulsado');
+                                    return (
+                                      <div className={cn("flex items-center gap-2", isHome ? "flex-row-reverse" : "flex-row")}>
+                                        <span className="text-sm select-none shrink-0">{isRed ? '🟥' : '🟨'}</span>
+                                        <div className={cn("flex flex-col", isHome ? "items-end text-right" : "items-start text-left")}>
+                                          <div className="text-xs font-black text-white uppercase tracking-tight">{playerName}</div>
+                                          <div className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mt-1">{inc.detail}</div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {!isGoal && !isSub && !isCard && (
+                                    <div className={cn("flex flex-col", isHome ? "items-end text-right" : "items-start text-left")}>
+                                      <div className="text-xs font-black text-white uppercase tracking-tight">{playerName}</div>
+                                      <div className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mt-1">{inc.detail}</div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className={cn(
+                                  "w-12 h-12 rounded-full flex items-center justify-center font-mono font-black text-sm shrink-0 border-4 z-20 shadow-2xl relative",
+                                  isHome ? "bg-black border-brand-green text-brand-green" : "bg-black border-brand-red text-brand-red"
+                                )}>
+                                  {inc.minute}'
+                                  {isGoal && (
+                                    <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute -inset-4 bg-brand-green/10 rounded-full blur-xl -z-10" />
+                                  )}
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -997,13 +1236,17 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
                                        <div className="flex items-center gap-4">
                                           <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center font-mono font-black text-brand-green border border-white/5 group-hover:border-brand-green/30 transition-all">#{ps.player_id % 99}</div>
                                           <div>
-                                             <div className="text-sm font-black text-brand-text-white uppercase leading-none mb-1">Nombre Jugador</div>
-                                             <div className="text-[9px] font-bold text-brand-text-muted uppercase tracking-tighter">Posición Clave</div>
+                                             <div className="text-sm font-black text-brand-text-white uppercase leading-none mb-1">
+                                                {ps.player_name || ps.name || `Jugador #${ps.player_id}`}
+                                             </div>
+                                             <div className="text-[9px] font-bold text-brand-text-muted uppercase tracking-tighter">
+                                                {ps.position || ps.pos || 'Campo'}
+                                             </div>
                                           </div>
                                        </div>
                                     </td>
                                     <td className="py-4 px-4 text-center font-mono text-xs text-brand-text-muted">{ps.minutes_played}'</td>
-                                    <td className="py-4 px-4 text-center font-mono text-xs text-brand-text-white">{(ps.expected_goals || 0).toFixed(2)}</td>
+                                    <td className="py-4 px-4 text-center font-mono text-xs text-brand-text-white">{formatXG(ps.expected_goals)}</td>
                                     <td className="py-4 px-4 text-center font-mono text-xs text-brand-green">{ps.goals}/{ps.goal_assist}</td>
                                     <td className="py-4 px-8 text-right">
                                       <span className={cn(
@@ -1198,7 +1441,21 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
           <Footer />
         </div>
       </div>
+
+      {/* Custom Glowing Cyber-Green Scrollbar Overlay (perfect for mobile and dark-mode aesthetics) */}
+      {scrollStats.scrollHeight > scrollStats.clientHeight && (
+        <div className="absolute right-1 top-2 bottom-2 w-1.5 pointer-events-none z-50 bg-black/40 rounded-full border border-white/5 backdrop-blur-[1px]">
+          <div 
+            className="absolute left-0 right-0 rounded-full bg-gradient-to-b from-[#00ff88] to-[#00d4ff] shadow-[0_0_8px_rgba(0,255,136,0.4)] transition-all duration-75"
+            style={{
+              height: `${Math.max(40, scrollStats.clientHeight * (scrollStats.clientHeight / scrollStats.scrollHeight))}px`,
+              transform: `translateY(${(scrollStats.scrollTop / (scrollStats.scrollHeight - scrollStats.clientHeight)) * (scrollStats.clientHeight - Math.max(40, scrollStats.clientHeight * (scrollStats.clientHeight / scrollStats.scrollHeight)) - 24) + 12}px)`
+            }}
+          />
+        </div>
+      )}
     </div>
+  </div>
   );
 }
 
@@ -1354,12 +1611,16 @@ function StatLine({ label, home, away, unit = '', subHome, subAway }: { label: s
   const total = h + a;
   const homePercent = total === 0 ? 50 : (h / total) * 100;
   
+  const isXg = label.toLowerCase().includes('xg');
+  const displayHome = isXg ? formatXG(home) : `${h}${unit}`;
+  const displayAway = isXg ? formatXG(away) : `${a}${unit}`;
+  
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-[11px] text-brand-text-muted">
-        <span>{h}{unit} {subHome !== undefined && `(${subHome})`}</span>
+        <span>{displayHome} {subHome !== undefined && `(${subHome})`}</span>
         <span className="uppercase tracking-tighter text-brand-text-white font-medium">{label}</span>
-        <span>{a}{unit} {subAway !== undefined && `(${subAway})`}</span>
+        <span>{displayAway} {subAway !== undefined && `(${subAway})`}</span>
       </div>
       <div className="h-1 bg-brand-bg-primary rounded-full flex overflow-hidden">
         <motion.div initial={{ width: 0 }} animate={{ width: `${homePercent}%` }} className="bg-brand-green" />

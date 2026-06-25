@@ -1,0 +1,24 @@
+{
+  "name": "BSD LIVE — Predicciones de Fútbol",
+  "short_name": "BSD LIVE",
+  "description": "Predicciones de fútbol en tiempo real con IA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#00ff88",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

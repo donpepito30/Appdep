@@ -1,6 +1,47 @@
 import { Stats, Prediction, Odds, TeamForm, OddMarket } from '../types';
 
 /**
+ * Align and guarantee a scoreline matches the output win probabilities.
+ * Mathematically links score outcome with win probability vector to eliminate contradictions.
+ */
+export function alignScorelineWithProbabilities(
+  scoreline: string,
+  homeProb: number,
+  drawProb: number,
+  awayProb: number
+): string {
+  if (!scoreline || scoreline === '?-?') {
+    scoreline = '1-1';
+  }
+  
+  const cleanScore = scoreline.replace(':', '-');
+  const [hStr, aStr] = cleanScore.split('-');
+  let h = parseInt(hStr);
+  let a = parseInt(aStr);
+  if (isNaN(h)) h = 1;
+  if (isNaN(a)) a = 1;
+
+  // Enforce consistent score based on dominant probability
+  if (homeProb > awayProb && homeProb >= 0.40) {
+    if (h <= a) {
+      h = Math.max(1, a + 1);
+    }
+  } else if (awayProb > homeProb && awayProb >= 0.40) {
+    if (a <= h) {
+      a = Math.max(1, h + 1);
+    }
+  } else {
+    // Expected draw or very close match
+    if (h !== a) {
+      const balanced = Math.max(1, Math.round((h + a) / 2));
+      h = balanced;
+      a = balanced;
+    }
+  }
+  return `${h}-${a}`;
+}
+
+/**
  * Sigmoid function to convert value difference to probability.
  */
 function sigmoid(x: number): number {
@@ -81,7 +122,7 @@ export function calculatePoissonModel(
       return expected > 0 ? (actual * 0.4) + (expected * 0.6) : actual;
     });
     
-    return calculateWeightedAverage(data) * (1.20 + (Math.random() * 0.25)); // Increased scaling for realistic variance
+    return calculateWeightedAverage(data) * 1.25; // Increased scaling for realistic variance
   };
 
   const gfMediaLocal = getWeightedGoals(homeForm, 'for');
@@ -107,9 +148,9 @@ export function calculatePoissonModel(
   }
 
   // Add tactical variability and drift
-  const tacticalNoise = (Math.random() * 0.4) - 0.15;
-  lambdaHome = Math.max(0.1, lambdaHome + tacticalNoise);
-  lambdaAway = Math.max(0.1, lambdaAway - (tacticalNoise * 0.5));
+  // Bias táctico fijo calibrado (sin varianza aleatoria)
+  lambdaHome = Math.max(0.1, lambdaHome + 0.05);
+  lambdaAway = Math.max(0.1, lambdaAway);
 
   // 3. Compute outcome matrix (up to 8 goals each)
   let homeWinProb = 0;
@@ -174,11 +215,13 @@ export function calculatePoissonModel(
   // Confidence calculation based on lambda stability
   const confidence = Math.min(0.95, 0.5 + (Math.abs(homeWinProb - awayWinProb) * 0.4) + (maxProb * 0.5));
 
+  const alignedScore = alignScorelineWithProbabilities(predictedScoreline, homeWinProb, drawProb, awayWinProb);
+
   return {
     homeWinProb,
     drawProb,
     awayWinProb,
-    scoreline: predictedScoreline,
+    scoreline: alignedScore,
     source: 'HEURISTIC', 
     confidence,
     btts: bttsProb > 0.6, // Higher threshold for "Yes"
@@ -188,6 +231,34 @@ export function calculatePoissonModel(
     over35Prob,
     bttsReasoning: bttsReason
   };
+}
+
+/**
+ * Custom BTTS calculation formula provided by the user.
+ * Combines average xG, over 2.5 probability, and head-to-head performance.
+ */
+export function calcularBTTSPropio(
+  xgLocal: number, 
+  xgVisitante: number, 
+  overProb?: number, 
+  h2hStats?: { bttsPorcentaje?: number }
+): number {
+  // Fórmula combinando múltiples factores
+  let bttsProb = 50; // base
+  
+  // Factor 1: xG promedio de ambos
+  const xgPromedio = (xgLocal + xgVisitante) / 2;
+  bttsProb += (xgPromedio - 1.2) * 10;
+  
+  // Factor 2: Over 2.5 de la API (si existe)
+  if (overProb !== undefined) bttsProb += (overProb - 50) * 0.3;
+  
+  // Factor 3: Historial H2H
+  if (h2hStats && h2hStats.bttsPorcentaje !== undefined && h2hStats.bttsPorcentaje > 50) {
+    bttsProb += 8;
+  }
+  
+  return Math.min(85, Math.max(25, Math.round(bttsProb)));
 }
 
 /**
@@ -279,18 +350,29 @@ export function calculateHybridPrediction(
   const s = finalHome + finalDraw + finalAway;
   const avgBTTSProb = finalBTTS / totalWeight;
   
+  const finalHomeProb = finalHome / s;
+  const finalDrawProb = finalDraw / s;
+  const finalAwayProb = finalAway / s;
+
+  // Align ensemble's composite scoreline
+  let rawScoreline = sources[0]?.scoreline || '1-1';
+  if (rawScoreline === '?-?' && sources[1]?.scoreline && sources[1]?.scoreline !== '?-?') {
+    rawScoreline = sources[1].scoreline;
+  }
+  const alignedScoreline = alignScorelineWithProbabilities(rawScoreline, finalHomeProb, finalDrawProb, finalAwayProb);
+
   // Refine BTTS Reasoning for high-level ensemble
   let bttsReasonFinal = sources.find(src => src.bttsReasoning)?.bttsReasoning || "Consenso de modelos estadísticos.";
   
   const prediction: Prediction = {
-    homeWinProb: finalHome / s,
-    drawProb: finalDraw / s,
-    awayWinProb: finalAway / s,
+    homeWinProb: finalHomeProb,
+    drawProb: finalDrawProb,
+    awayWinProb: finalAwayProb,
     bttsProb: avgBTTSProb,
     over25Prob: finalOver25 / totalWeight,
     source: 'ENSEMBLE_FIXED_V3',
     confidence: Math.min(0.98, totalWeight / sources.length),
-    scoreline: sources[0].scoreline, 
+    scoreline: alignedScoreline, 
     btts: avgBTTSProb > 0.61, // Even more selective in final ensemble
     bttsReasoning: bttsReasonFinal
   };
@@ -336,3 +418,108 @@ export function calculateMomentum(stats: Stats | null | undefined): number {
   // Normalized between -1 (Pure Away pressure) and +1 (Pure Home pressure)
   return (homePressure - awayPressure) / total;
 }
+
+/**
+ * Convierte fixtures en TeamForm (extraído de useMatchStore para reutilización)
+ */
+export function transformToForm(fixtures: any[], teamId: string): TeamForm {
+  const recent = (fixtures || []).slice(0, 10).map(f => {
+    const isHome = String(f.homeTeamId || f.home_team_id) === String(teamId);
+    const homeScore = f.homeScore ?? f.home_score ?? 0;
+    const awayScore = f.awayScore ?? f.away_score ?? 0;
+    const goalsFor = isHome ? homeScore : awayScore;
+    const goalsAgainst = isHome ? awayScore : homeScore;
+    
+    let xgH = f.xgHome ?? f.xg_home;
+    let xgA = f.xgAway ?? f.xg_away;
+    
+    if ((xgH === undefined || xgH === null) && f.stats) {
+      const statsArr = Array.isArray(f.stats) ? f.stats : (f.stats.results || []);
+      if (Array.isArray(statsArr)) {
+        statsArr.forEach((s: any) => {
+          const type = (s.type || s.name || '').toLowerCase();
+          if (type === 'xg' || type.includes('expected goals')) {
+            xgH = s.home ?? s.value_home;
+            xgA = s.away ?? s.value_away;
+          }
+        });
+      }
+    }
+
+    const xgFor = isHome ? (xgH ?? 0) : (xgA ?? 0);
+    const xgAgainst = isHome ? (xgA ?? 0) : (xgH ?? 0);
+
+    return {
+      result: goalsFor > goalsAgainst ? 'W' as const : goalsFor === goalsAgainst ? 'D' as const : 'L' as const,
+      score: `${homeScore}-${awayScore}`,
+      opponent: isHome ? (f.awayTeamName || f.away_team_name || f.awayTeam) : (f.homeTeamName || f.home_team_name || f.homeTeam),
+      xg: typeof xgFor === 'number' ? xgFor : (Number(xgFor) || 0),
+      xgAgainst: typeof xgAgainst === 'number' ? xgAgainst : (Number(xgAgainst) || 0),
+      date: f.date || f.event_date || f.startTime,
+      goalsFor,
+      goalsAgainst
+    };
+  });
+
+  const totalMatches = recent.length || 1;
+  const avgGoalsFor = recent.reduce((acc, r) => acc + r.goalsFor, 0) / totalMatches;
+  const avgGoalsAgainst = recent.reduce((acc, r) => acc + r.goalsAgainst, 0) / totalMatches;
+  const avgXGFor = recent.reduce((acc, r) => acc + r.xg, 0) / totalMatches;
+  const avgXGAgainst = recent.reduce((acc, r) => acc + r.xgAgainst, 0) / totalMatches;
+
+  return {
+    recent,
+    avgXGFor,
+    avgXGAgainst,
+    avgGoalsFor,
+    avgGoalsAgainst
+  };
+}
+
+/**
+ * Valida si una apuesta tiene valor real comparando probabilidad estimada vs cuota de mercado
+ */
+export function computeLocalValue(
+  match: { homeTeam: string; awayTeam: string },
+  probs: { market: string; label: string; prob: number }[],
+  odds: OddMarket | null
+): { isValue: boolean; percentage: number; market: string; odds: number; probability: number } | null {
+  if (!odds || probs.length === 0) return null;
+
+  const top = probs[0];
+  if (!top || top.prob < 0.45) return null;
+
+  let odd: number | undefined;
+  switch (top.market) {
+    case 'BTTS': odd = odds.btts_yes; break;
+    case 'OVER': odd = odds.over_25_goals; break;
+    case 'OVER15': odd = odds.over_15_goals; break;
+    case 'OVER35': odd = odds.over_35_goals; break;
+    case '1X2':
+      if (top.label === 'Local') odd = odds.home_win;
+      else if (top.label === 'Visitante') odd = odds.away_win;
+      else odd = odds.draw;
+      break;
+    default: odd = undefined;
+  }
+
+  if (!odd || odd < 1.5) return null;
+
+  const impliedProb = 1 / odd;
+  const edge = top.prob - impliedProb;
+  const percentage = (edge / impliedProb) * 100;
+
+  // Solo marcar valor si el edge > 8% y la probabilidad supera 55%
+  if (percentage > 8 && top.prob > 0.55) {
+    return {
+      isValue: true,
+      percentage,
+      market: top.label,
+      odds: odd,
+      probability: top.prob,
+    };
+  }
+
+  return null;
+}
+
