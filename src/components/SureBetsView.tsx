@@ -8,6 +8,7 @@ import { cn } from '../types';
 import { useMatchStore } from '../hooks/useMatchStore';
 import { api } from '../services/api';
 import { Footer } from './Footer';
+import { useUI } from '../contexts/UIContext';
 
 interface SureBet {
   match: Event;
@@ -94,13 +95,18 @@ function detectSureBet(match: Event, prediction: Prediction | null, odds: OddMar
 
 function SureBetCard({ bet }: { bet: SureBet }) {
   const valueColor = bet.valuePercent > 20 ? 'text-[#4edea3]' : bet.valuePercent > 12 ? 'text-brand-green' : 'text-brand-yellow';
+  const { setSelectedMatchId, setActiveTab } = useUI();
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       whileHover={{ y: -4 }}
-      className="bg-brand-bg-card rounded-[2rem] p-6 border border-brand-border/40 hover:border-brand-green/30 transition-all relative overflow-hidden group shadow-lg"
+      onClick={() => {
+        setSelectedMatchId(bet.match.id);
+        setActiveTab('live');
+      }}
+      className="bg-brand-bg-card rounded-[2rem] p-6 border border-brand-border/40 hover:border-brand-green/30 transition-all relative overflow-hidden group shadow-lg cursor-pointer"
     >
       {/* Background Decorative Element */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-brand-green/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none" />

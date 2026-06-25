@@ -559,25 +559,11 @@ async function startServer() {
     // Ensure endpoint starts with a slash if it's not empty and doesn't have one
     const normalizedEndpoint = (endpoint.startsWith("/") || endpoint === "") ? endpoint : `/${endpoint}`;
 
-    // 2. Validar el path contra la lista de patrones permitidos (allowlist)
+    // 2. Validar que el path sea seguro (solo caracteres alfanuméricos, barras, guiones, etc.)
     const endpointPath = normalizedEndpoint.split('?')[0];
-    const ALLOWED_PATTERNS = [
-      /^\/events\/[^/]+\/?$/,
-      /^\/events\/[^/]+\/stats\/?$/,
-      /^\/events\/[^/]+\/h2h\/?$/,
-      /^\/events\/[^/]+\/lineups\/?$/,
-      /^\/events\/[^/]+\/odds\/?$/,
-      /^\/events\/[^/]+\/prediction\/?$/,
-      /^\/eventos\/[^/]+\/predicci\u00f3n\/?$/, // "predicción" con unicode
-      /^\/eventos\/[^/]+\/predicción\/?$/,      // "predicción" literal
-      /^\/teams\/[^/]+\/fixtures\/?$/,
-      /^\/live\/?$/,
-      /^\/schedule\/?$/
-    ];
-
-    const isAllowed = ALLOWED_PATTERNS.some(regex => regex.test(endpointPath));
-    if (!isAllowed) {
-      return res.status(403).json({ error: "Acceso denegado. Este endpoint no está permitido." });
+    const isSafePath = /^[a-zA-Z0-9_\-\/()%\s]+$/.test(decodeURIComponent(endpointPath));
+    if (!isSafePath) {
+      return res.status(403).json({ error: "Acceso denegado. Path con caracteres no permitidos." });
     }
 
     const targetUrl = `https://sports.bzzoiro.com/api/v2${normalizedEndpoint}`;
@@ -587,12 +573,12 @@ async function startServer() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 40000); // 40s timeout for server
 
-        const authHeader = req.headers["authorization"] || (apiKey ? `Token ${apiKey}` : undefined);
+        const authHeader = apiKey ? `Token ${apiKey}` : undefined;
 
         const response = await fetch(targetUrl, {
           method: req.method,
           headers: {
-            "Authorization": authHeader as string,
+            ...(authHeader ? { "Authorization": authHeader } : {}),
             "Content-Type": req.headers["content-type"] || "application/json",
             "Accept": "application/json",
           },

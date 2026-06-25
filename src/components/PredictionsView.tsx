@@ -6,13 +6,14 @@ import { PredictionCard } from './PredictionCard';
 import { dayLabels } from '../hooks/useMatchStore';
 import { Footer } from './Footer';
 import { computeLocalValue, calculatePoissonModel } from '../lib/prediction';
+import { useUI } from '../contexts/UIContext';
 
 interface PredictionsViewProps {
   groupedByDay: Record<'today' | 'tomorrow' | 'dayAfter' | 'later', Event[]>;
   v2Predictions: { event: Event, prediction: Prediction }[];
   enrichedData: Record<string, EnrichedEventData>;
   dayLabels: Record<string, string>;
-  onSelectMatch: (id: string) => void;
+  onSelectMatch?: (id: string) => void;
   getMarketProbabilities: (match: Event) => { market: string; label: string; prob: number }[];
   frozenPredictions: Record<string, Prediction>;
   teamForms: Record<string, TeamForm>;
@@ -28,8 +29,22 @@ export function PredictionsView({
   frozenPredictions,
   teamForms
 }: PredictionsViewProps) {
+  const { openModal } = useUI();
   const finalDayLabels = propDayLabels || dayLabels;
   const days: Array<'today' | 'tomorrow' | 'dayAfter'> = ['today', 'tomorrow', 'dayAfter'];
+
+  const handleSelectMatch = (id: string) => {
+    if (onSelectMatch) {
+      onSelectMatch(id);
+    } else {
+      const m = (groupedByDay.today || [])
+        .concat(groupedByDay.tomorrow || [], groupedByDay.dayAfter || [], groupedByDay.later || [])
+        .find(match => match.id === id);
+      if (m) {
+        openModal('MatchAnalysisModal', { match: m });
+      }
+    }
+  };
 
   // Crear mapa para buscar partidos por id de forma eficiente
   const matchMap = useMemo(() => {
@@ -378,7 +393,7 @@ export function PredictionsView({
                       topProb={marketData?.prob || 0.5}
                       bttsProb={bttsData?.prob || 0}
                       over25Prob={overData?.prob || 0}
-                      onSelect={onSelectMatch}
+                      onSelect={handleSelectMatch}
                     />
                   );
                 })}

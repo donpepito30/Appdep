@@ -76,8 +76,43 @@ function setApiStatus(status: 'connected' | 'error' | 'unauthorized') {
   statusSubscribers.forEach(cb => cb(status));
 }
 
+let memoryApiCount: number | null = null;
+let memoryApiDateStr: string | null = null;
+let lastWriteTime = 0;
+let pendingWriteTimeout: any = null;
+
+function flushApiCount() {
+  if (pendingWriteTimeout) {
+    clearTimeout(pendingWriteTimeout);
+    pendingWriteTimeout = null;
+  }
+  try {
+    if (memoryApiCount !== null && memoryApiDateStr !== null) {
+      localStorage.setItem('API_COUNTER', JSON.stringify({ count: memoryApiCount, dateStr: memoryApiDateStr }));
+      lastWriteTime = Date.now();
+    }
+  } catch (e) {}
+}
+
+function scheduleSaveApiCount() {
+  const now = Date.now();
+  const timeSinceLastWrite = now - lastWriteTime;
+  
+  if (timeSinceLastWrite >= 10000) {
+    flushApiCount();
+  } else if (!pendingWriteTimeout) {
+    pendingWriteTimeout = setTimeout(() => {
+      flushApiCount();
+    }, 10000 - timeSinceLastWrite);
+  }
+}
+
 function getApiCount() {
   const dateStr = new Date().toISOString().split('T')[0];
+  if (memoryApiCount !== null && memoryApiDateStr === dateStr) {
+    return { count: memoryApiCount, dateStr };
+  }
+
   let count = 0;
   try {
     const saved = JSON.parse(localStorage.getItem('API_COUNTER') || '{}');
@@ -87,14 +122,20 @@ function getApiCount() {
       localStorage.setItem('API_COUNTER', JSON.stringify({ count: 0, dateStr }));
     }
   } catch(e) {}
+
+  memoryApiCount = count;
+  memoryApiDateStr = dateStr;
   return { count, dateStr };
 }
 
 function incrementApiCount() {
   const { count, dateStr } = getApiCount();
   const newCount = count + 1;
-  localStorage.setItem('API_COUNTER', JSON.stringify({ count: newCount, dateStr }));
+  memoryApiCount = newCount;
+  memoryApiDateStr = dateStr;
+  
   counterSubscribers.forEach(cb => cb(newCount, dateStr));
+  scheduleSaveApiCount();
 }
 
 // ---------------------------
@@ -134,8 +175,6 @@ async function fetchSeguro<T>(
     return finalData;
   }
 
-  const token = sessionStorage.getItem('BSD_API_KEY') || localStorage.getItem('BSD_API_KEY');
-
   // 3. Colapsar peticiones en vuelo idénticas
   if (inFlight.has(url)) {
     return inFlight.get(url);
@@ -164,10 +203,6 @@ async function fetchSeguro<T>(
             'Accept': 'application/json',
           };
 
-          if (token) {
-            headers['Authorization'] = `Token ${token}`;
-          }
-
           incrementApiCount();
           
           const response = await fetch(url, { 
@@ -179,9 +214,7 @@ async function fetchSeguro<T>(
 
           if (response.status === 401 || response.status === 403) {
             setApiStatus('unauthorized');
-            localStorage.removeItem('BSD_API_KEY');
-            sessionStorage.removeItem('BSD_API_KEY');
-            throw new Error('API Key inválida o expirada. Reconfigúrala.');
+            throw new Error('Error de autorización: La API Key configurada en el servidor es inválida o ha expirado.');
           }
 
           setApiStatus('connected');

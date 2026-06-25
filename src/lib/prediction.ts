@@ -95,6 +95,21 @@ export function calculateWeightedAverage(lastGoals: number[]): number {
   return sumWeighted / totalWeight;
 }
 
+export const LEAGUE_HOME_ADVANTAGE: { [key: string]: number } = {
+  'Premier League': 0.24,
+  'La Liga': 0.26,
+  'LaLiga': 0.26,
+  'Bundesliga': 0.28,
+  'Serie A': 0.23,
+  'Ligue 1': 0.22,
+  'MLS': 0.35,
+  'Liga MX': 0.32,
+  'Brasileirão': 0.38,
+  'Eredivisie': 0.25,
+  'Primera División Ecuador': 0.40,
+  'LigaPro': 0.40
+};
+
 /**
  * Advanced Poisson Prediction Model.
  */
@@ -103,8 +118,9 @@ export function calculatePoissonModel(
   awayForm: TeamForm | null,
   liveStats?: Stats | null,
   minute: number = 0,
-  currentScore: { home: number, away: number } = { home: 0, away: 0 }
-): Prediction {
+  currentScore: { home: number, away: number } = { home: 0, away: 0 },
+  leagueHomeAdvantage: number = 0.20
+): Prediction & { poissonBttsProb?: number } {
   // 1. Calculate Media Ponderada for Goals For and Against
   const getWeightedGoals = (form: TeamForm | null, type: 'for' | 'against'): number => {
     if (!form || form.recent.length < 3) {
@@ -122,7 +138,12 @@ export function calculatePoissonModel(
       return expected > 0 ? (actual * 0.4) + (expected * 0.6) : actual;
     });
     
-    return calculateWeightedAverage(data) * 1.25; // Increased scaling for realistic variance
+    // Take weighted average
+    const totalWeight = data.reduce((acc, _, idx) => acc + Math.max(0.1, 1 - (idx * 0.1)), 0);
+    const sumWeighted = data.reduce((acc, val, idx) => acc + val * Math.max(0.1, 1 - (idx * 0.1)), 0);
+    const weightedAvg = sumWeighted / (totalWeight || 1);
+    
+    return weightedAvg * 1.25; // Increased scaling for realistic variance
   };
 
   const gfMediaLocal = getWeightedGoals(homeForm, 'for');
@@ -130,9 +151,9 @@ export function calculatePoissonModel(
   const gfMediaVisitante = getWeightedGoals(awayForm, 'for');
   const gcMediaVisitante = getWeightedGoals(awayForm, 'against');
 
-  // 2. Adjust Lambdas for more dynamic goal projections
-  let lambdaHome = (gfMediaLocal + gcMediaVisitante) / 2 + 0.35; // Tactical bias for home + volatility
-  let lambdaAway = (gfMediaVisitante + gcMediaLocal) / 2 + 0.15;
+  // 2. Adjust Lambdas for more dynamic goal projections using calibrated home advantage
+  let lambdaHome = (gfMediaLocal + gcMediaVisitante) / 2 + leagueHomeAdvantage;
+  let lambdaAway = (gfMediaVisitante + gcMediaLocal) / 2 + 0.10; // Adjusted visitor bias
 
   // 3. Adjust for Live Match State if applicable
   if (minute > 0) {
@@ -191,6 +212,8 @@ export function calculatePoissonModel(
     }
   }
 
+  const purePoissonBtts = bttsProb;
+
   // 4. BTTS Refinement based on historical frequency
   let bttsHistoricalFreq = 0.5;
   let bttsReason = 'Proyección estadística basada en Poisson.';
@@ -212,20 +235,28 @@ export function calculatePoissonModel(
     }
   }
 
-  // Confidence calculation based on lambda stability
-  const confidence = Math.min(0.95, 0.5 + (Math.abs(homeWinProb - awayWinProb) * 0.4) + (maxProb * 0.5));
-
-  const alignedScore = alignScorelineWithProbabilities(predictedScoreline, homeWinProb, drawProb, awayWinProb);
+  // Confidence calculation penalizing when form.recent.length < 5
+  let recentCount = 5;
+  if (homeForm && awayForm) {
+    recentCount = Math.min(homeForm.recent.length, awayForm.recent.length);
+  } else if (homeForm) {
+    recentCount = homeForm.recent.length;
+  } else if (awayForm) {
+    recentCount = awayForm.recent.length;
+  }
+  const penalty = Math.min(1, recentCount / 5);
+  const confidence = Math.min(0.95, (0.5 + (Math.abs(homeWinProb - awayWinProb) * 0.4) + (maxProb * 0.5)) * penalty);
 
   return {
     homeWinProb,
     drawProb,
     awayWinProb,
-    scoreline: alignedScore,
+    scoreline: predictedScoreline, // Direct scoreline from maximum Poisson probability (unaligned)
     source: 'HEURISTIC', 
     confidence,
     btts: bttsProb > 0.6, // Higher threshold for "Yes"
     bttsProb,
+    poissonBttsProb: purePoissonBtts,
     over15Prob,
     over25Prob,
     over35Prob,
@@ -272,23 +303,35 @@ export function calculateHybridPrediction(
   odds: OddMarket | null,
   form?: { home: TeamForm | null, away: TeamForm | null },
   minute: number = 0,
-  currentScore: { home: number, away: number } = { home: 0, away: 0 }
+  currentScore: { home: number, away: number } = { home: 0, away: 0 },
+  leagueName?: string
 ): Prediction {
   const sources: Prediction[] = [];
   
-  // 1. Statistical Poisson Model (Historical basis)
+  // 1. Resolve Calibrated League Home Advantage
+  let homeAdvantage = 0.20;
+  if (leagueName) {
+    const matchedKey = Object.keys(LEAGUE_HOME_ADVANTAGE).find(k => 
+      leagueName.toLowerCase().includes(k.toLowerCase())
+    );
+    if (matchedKey) {
+      homeAdvantage = LEAGUE_HOME_ADVANTAGE[matchedKey];
+    }
+  }
+
+  // 2. Statistical Poisson Model (Historical basis)
   if (form?.home && form?.away) {
-    const poisson = calculatePoissonModel(form.home, form.away, stats, minute, currentScore);
+    const poisson = calculatePoissonModel(form.home, form.away, stats, minute, currentScore, homeAdvantage);
     poisson.confidence *= 1.2; // Increase weight of proven mathematical model
     sources.push(poisson);
   }
 
-  // 2. ML Prediction (Black-box pattern matching)
+  // 3. ML Prediction (Black-box pattern matching)
   if (mlPrediction && mlPrediction.over25Prob !== undefined) {
     sources.push({ ...mlPrediction, confidence: mlPrediction.confidence || 0.6 });
   }
 
-  // 3. Market Prediction (The 'Wisdom of the Crowd')
+  // 4. Market Prediction (The 'Wisdom of the Crowd')
   if (odds && odds.home_win && odds.draw && odds.away_win) {
     const implHome = 1 / odds.home_win;
     const implDraw = 1 / odds.draw;
@@ -329,7 +372,7 @@ export function calculateHybridPrediction(
     };
   }
 
-  // 4. Ensemble Weighting (Bayesian Weighting)
+  // 5. Ensemble Weighting (Bayesian Weighting)
   let totalWeight = 0;
   let finalHome = 0;
   let finalDraw = 0;
@@ -346,20 +389,40 @@ export function calculateHybridPrediction(
     totalWeight += s.confidence;
   });
 
-  // 5. Normalization & Final Confidence
+  // 6. Normalization & Final Confidence
   const s = finalHome + finalDraw + finalAway;
-  const avgBTTSProb = finalBTTS / totalWeight;
   
   const finalHomeProb = finalHome / s;
   const finalDrawProb = finalDraw / s;
   const finalAwayProb = finalAway / s;
 
-  // Align ensemble's composite scoreline
+  // 7. Ensemble BTTS 3-Way Integration
+  // Poisson BTTS Puro (0.4) + Histórico (0.3) + Propio (0.3)
+  let bttsHistoricalFreq = 0.5;
+  if (form?.home && form?.away) {
+    const homeRecent = form.home.recent || [];
+    const awayRecent = form.away.recent || [];
+    const homeBTTS = homeRecent.filter(m => m.goalsFor > 0 && m.goalsAgainst > 0).length / (homeRecent.length || 1);
+    const awayBTTS = awayRecent.filter(m => m.goalsFor > 0 && m.goalsAgainst > 0).length / (awayRecent.length || 1);
+    bttsHistoricalFreq = (homeBTTS + awayBTTS) / 2;
+  }
+
+  const xgLocal = form?.home?.avgXGFor ?? stats?.xgHome ?? 1.3;
+  const xgVisitante = form?.away?.avgXGFor ?? stats?.xgAway ?? 1.1;
+  const overProb = odds?.over_25_goals ? ((1 / odds.over_25_goals) * 100) : (mlPrediction?.over25Prob ? mlPrediction.over25Prob * 100 : undefined);
+  const bttsPropioPct = calcularBTTSPropio(xgLocal, xgVisitante, overProb);
+  const bttsPropioProb = bttsPropioPct / 100;
+
+  const poissonSource = sources.find(src => src.source === 'HEURISTIC') as (Prediction & { poissonBttsProb?: number }) | undefined;
+  const poissonPureBtts = poissonSource?.poissonBttsProb ?? poissonSource?.bttsProb ?? 0.5;
+
+  const customBTTSProb = (poissonPureBtts * 0.4) + (bttsHistoricalFreq * 0.3) + (bttsPropioProb * 0.3);
+
+  // Direct scoreline from first valid source's raw Poisson output (no post-hoc alignment)
   let rawScoreline = sources[0]?.scoreline || '1-1';
   if (rawScoreline === '?-?' && sources[1]?.scoreline && sources[1]?.scoreline !== '?-?') {
     rawScoreline = sources[1].scoreline;
   }
-  const alignedScoreline = alignScorelineWithProbabilities(rawScoreline, finalHomeProb, finalDrawProb, finalAwayProb);
 
   // Refine BTTS Reasoning for high-level ensemble
   let bttsReasonFinal = sources.find(src => src.bttsReasoning)?.bttsReasoning || "Consenso de modelos estadísticos.";
@@ -368,12 +431,12 @@ export function calculateHybridPrediction(
     homeWinProb: finalHomeProb,
     drawProb: finalDrawProb,
     awayWinProb: finalAwayProb,
-    bttsProb: avgBTTSProb,
+    bttsProb: customBTTSProb,
     over25Prob: finalOver25 / totalWeight,
     source: 'ENSEMBLE_FIXED_V3',
     confidence: Math.min(0.98, totalWeight / sources.length),
-    scoreline: alignedScoreline, 
-    btts: avgBTTSProb > 0.61, // Even more selective in final ensemble
+    scoreline: rawScoreline, // Direct Poisson scoreline
+    btts: customBTTSProb > 0.61, // Selectivity threshold
     bttsReasoning: bttsReasonFinal
   };
 

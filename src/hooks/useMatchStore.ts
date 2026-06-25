@@ -292,51 +292,6 @@ const initStore = async () => {
   }
 };
 
-let pollIntervalId: any = null;
-
-const startPolling = () => {
-  if (pollIntervalId) return;
-  
-  const pollEvents = async () => {
-    try {
-      const [fresh, freshV2, freshUpcoming] = await Promise.all([
-        api.getLiveEvents(),
-        api.getV2Predictions(),
-        api.getPredictionsPrimaryEvents()
-      ]);
-      
-      const updatedEvents = fresh.filter(e => {
-        const existing = g_matches.find(m => m.id === e.id);
-        return !existing || !existing.last_updated || (e.last_updated && new Date(e.last_updated) > new Date(existing.last_updated));
-      });
-
-      let changed = false;
-      if (updatedEvents.length > 0) {
-        g_matches = fresh;
-        fetchMissingData(fresh);
-        changed = true;
-      }
-
-      if (freshV2 && freshV2.length > 0) {
-        g_v2Predictions = freshV2;
-        changed = true;
-      }
-
-      if (freshUpcoming && freshUpcoming.length > 0) {
-        g_upcomingMatches = freshUpcoming;
-        enrichEventsInParallel(freshUpcoming);
-        changed = true;
-      }
-      
-      if (changed) {
-        emit();
-      }
-    } catch(e) {}
-  };
-  
-  pollIntervalId = setInterval(pollEvents, 35000);
-};
-
 const syncMatchDetail = async (id: string, options: { stats?: boolean, slow?: boolean, forms?: boolean }) => {
   if (!id) return;
   
@@ -450,6 +405,75 @@ const syncMatchDetail = async (id: string, options: { stats?: boolean, slow?: bo
   }
 };
 
+let pollIntervalId: any = null;
+
+const stopPolling = () => {
+  if (pollIntervalId) {
+    clearInterval(pollIntervalId);
+    pollIntervalId = null;
+  }
+};
+
+const pollEvents = async () => {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    return;
+  }
+  try {
+    const [fresh, freshV2, freshUpcoming] = await Promise.all([
+      api.getLiveEvents(),
+      api.getV2Predictions(),
+      api.getPredictionsPrimaryEvents()
+    ]);
+    
+    const updatedEvents = fresh.filter(e => {
+      const existing = g_matches.find(m => m.id === e.id);
+      return !existing || !existing.last_updated || (e.last_updated && new Date(e.last_updated) > new Date(existing.last_updated));
+    });
+
+    let changed = false;
+    if (updatedEvents.length > 0) {
+      g_matches = fresh;
+      fetchMissingData(fresh);
+      changed = true;
+    }
+
+    if (freshV2 && freshV2.length > 0) {
+      g_v2Predictions = freshV2;
+      changed = true;
+    }
+
+    if (freshUpcoming && freshUpcoming.length > 0) {
+      g_upcomingMatches = freshUpcoming;
+      enrichEventsInParallel(freshUpcoming);
+      changed = true;
+    }
+    
+    if (g_selectedMatchId) {
+      await syncMatchDetail(g_selectedMatchId, { stats: true, slow: true, forms: true });
+    }
+    
+    if (changed) {
+      emit();
+    }
+  } catch(e) {}
+};
+
+const startPolling = () => {
+  if (pollIntervalId) return;
+  pollEvents();
+  pollIntervalId = setInterval(pollEvents, 35000);
+};
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  });
+}
+
 export function useMatchStore() {
   const [, setTick] = useState(0);
 
@@ -470,6 +494,11 @@ export function useMatchStore() {
   const setSelectedMatchId = useCallback((id: string | null) => {
     g_selectedMatchId = id;
     emit();
+  }, []);
+
+  const triggerImmediateSync = useCallback((matchId: string) => {
+    if (!matchId) return;
+    syncMatchDetail(matchId, { stats: true, slow: true, forms: true });
   }, []);
 
   const combinedLiveData = useMemo(() => {
@@ -694,6 +723,7 @@ export function useMatchStore() {
     dayLabels,
     selectedMatchId: g_selectedMatchId,
     setSelectedMatchId,
+    triggerImmediateSync,
     liveData: combinedLiveData,
     teamForms: g_teamForms,
     groupedByMarket,

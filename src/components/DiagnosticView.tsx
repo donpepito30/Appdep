@@ -12,7 +12,7 @@ export function DiagnosticView({ onClose }: { onClose: () => void }) {
   }>({
     direct: { status: 'idle', label: 'Conectividad Directa' },
     proxy: { status: 'idle', label: 'Conexión vía Proxy' },
-    key: { status: 'idle', label: 'Vigencia de API Key' },
+    key: { status: 'idle', label: 'Vigencia de API Key (Servidor)' },
   });
 
   const endpoints = [
@@ -43,17 +43,12 @@ export function DiagnosticView({ onClose }: { onClose: () => void }) {
     }
 
     // 3. Key Validation
-    const key = localStorage.getItem('BSD_API_KEY');
-    setResults(prev => ({ ...prev, key: { ...prev.key, status: 'loading', details: key ? `Key: ****${key.slice(-4)}` : 'Sin Key' } }));
-    if (!key) {
-      setResults(prev => ({ ...prev, key: { ...prev.key, status: 'error', details: 'No hay API Key configurada' } }));
-    } else {
-        try {
-            await api.getLeagues();
-            setResults(prev => ({ ...prev, key: { ...prev.key, status: 'success', details: `${key.slice(0,4)}...${key.slice(-4)}` } }));
-        } catch (e: any) {
-            setResults(prev => ({ ...prev, key: { ...prev.key, status: 'error', details: 'Key inválida o rechazada' } }));
-        }
+    setResults(prev => ({ ...prev, key: { ...prev.key, status: 'loading', details: 'Validando...' } }));
+    try {
+      await api.getLeagues();
+      setResults(prev => ({ ...prev, key: { ...prev.key, status: 'success', details: 'API Key del Servidor Activa y Válida' } }));
+    } catch (e: any) {
+      setResults(prev => ({ ...prev, key: { ...prev.key, status: 'error', details: 'Inactiva, inválida o expirada' } }));
     }
   };
 

@@ -51,6 +51,7 @@ interface DashboardProps {
   lineups: LineupData | null;
   playerStats: PlayerMatchStats[];
   syncMatchDetail?: (id: string, options: { stats?: boolean; slow?: boolean; forms?: boolean }) => Promise<void>;
+  triggerImmediateSync?: (matchId: string) => void;
 }
 
 interface AdvancedStats {
@@ -70,7 +71,7 @@ interface AdvancedStats {
 
 type DashboardTab = 'summary' | 'predictions' | 'stats' | 'h2h' | 'lineups' | 'shotmap';
 
-export function MatchDashboard({ match, stats, prediction, odds, incidents, momentum, lastStats, metadata, lineups, playerStats, syncMatchDetail }: DashboardProps) {
+export function MatchDashboard({ match, stats, prediction, odds, incidents, momentum, lastStats, metadata, lineups, playerStats, syncMatchDetail, triggerImmediateSync }: DashboardProps) {
   const [activeTab, setActiveTab] = React.useState<DashboardTab>('summary');
   
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -79,24 +80,20 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
 
   const { openTeamModal } = useTeamModal();
 
-  // Optimized Sync Loop
+  // Trigger immediate sync on load/mount or match/tab change without local intervals
   useEffect(() => {
-    if (!isVisible || !match.id || !syncMatchDetail) return;
+    if (!isVisible || !match.id) return;
 
-    const performSync = () => {
+    if (triggerImmediateSync) {
+      triggerImmediateSync(match.id);
+    } else if (syncMatchDetail) {
       syncMatchDetail(match.id, {
-        stats: true, // Siempre sincronizamos stats si estamos viendo el panel
+        stats: true,
         slow: activeTab === 'summary' || activeTab === 'lineups' || activeTab === 'stats',
         forms: activeTab === 'predictions' || activeTab === 'h2h'
       });
-    };
-
-    // Initial sync
-    performSync();
-
-    const interval = setInterval(performSync, 35000);
-    return () => clearInterval(interval);
-  }, [match.id, isVisible, activeTab, syncMatchDetail]);
+    }
+  }, [match.id, isVisible, activeTab, triggerImmediateSync, syncMatchDetail]);
 
   const [h2hHistory, setH2HHistory] = useState<H2HHistory[]>([]);
   const [loadingH2H, setLoadingH2H] = useState(false);
