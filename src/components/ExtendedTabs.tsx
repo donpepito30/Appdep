@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, getImgUrl } from '../services/api';
 import { MessageSquare, Tv, Crosshair, RefreshCw, AlertCircle, PlayCircle, ExternalLink, Globe } from 'lucide-react';
 import { cn, Broadcast } from '../types';
+import { ShotmapVisualization } from './ShotmapVisualization';
 
 export function SocialTab({ eventId }: { eventId: string }) {
   const [items, setItems] = useState<any[]>([]);
@@ -179,7 +180,7 @@ export function BroadcastsTab({ eventId }: { eventId: string }) {
   );
 }
 
-export function ShotmapTab({ eventId }: { eventId: string }) {
+export function ShotmapTab({ eventId, homeTeam, awayTeam }: { eventId: string; homeTeam?: string; awayTeam?: string }) {
   const [shots, setShots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -214,61 +215,10 @@ export function ShotmapTab({ eventId }: { eventId: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-brand-bg-card border border-brand-border/30 rounded-[2rem] p-6 space-y-6 relative overflow-hidden">
-        <h3 className="font-black text-sm uppercase tracking-widest text-brand-text-white flex items-center gap-2 mb-4">
-          <Crosshair className="w-5 h-5 text-brand-green" />
-          Mapa de Tiros xG
-        </h3>
-        
-        {/* Pitch rendering can be implemented here using coordinates */}
-        <div className="aspect-[1.5] w-full bg-brand-bg-secondary rounded-xl relative border border-brand-border/30 flex items-center justify-center overflow-hidden">
-           {/* Half pitch line */}
-           <div className="absolute w-px h-full bg-brand-border/50 left-1/2 -ml-[0.5px]"></div>
-           <div className="absolute w-16 h-16 border border-brand-border/50 rounded-full left-1/2 top-1/2 -ml-8 -mt-8"></div>
-           
-           {/* Penalty areas */}
-           <div className="absolute left-0 top-1/2 -mt-16 w-16 h-32 border border-brand-border/50 border-l-0"></div>
-           <div className="absolute right-0 top-1/2 -mt-16 w-16 h-32 border border-brand-border/50 border-r-0"></div>
-
-           {/* Plotting shots: x y are usually 0-100 */}
-           {shots.map((shot, i) => {
-              const teamClass = shot.is_home || shot.team === 'home' ? 'bg-brand-green' : 'bg-brand-red';
-              const size = Math.max(6, Math.min(20, (shot.xg || 0.05) * 50));
-              
-              const isGoal = shot.outcome === 'goal' || shot.type === 'goal';
-              const xPos = shot.x !== undefined ? `${shot.x}%` : '50%';
-              const yPos = shot.y !== undefined ? `${shot.y}%` : '50%';
-
-              return (
-                <div 
-                  key={shot.id || i} 
-                  className={cn("absolute rounded-full shadow cursor-pointer hover:ring-2 ring-white z-10", teamClass, isGoal ? 'animate-pulse' : 'opacity-70')}
-                  style={{ 
-                    left: xPos, 
-                    top: yPos, 
-                    width: size, 
-                    height: size, 
-                    transform: 'translate(-50%, -50%)' 
-                  }}
-                  title={`Min: ${shot.minute}' | xG: ${shot.xg || 'N/A'}${isGoal ? ' | GOL' : ''}`}
-                />
-              )
-           })}
-        </div>
-
-        <div className="flex gap-6 justify-center mt-6">
-          <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-brand-text-muted">
-            <span className="w-3 h-3 rounded-full bg-brand-green opacity-70"></span> Local
-          </div>
-          <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-brand-text-muted">
-            <span className="w-3 h-3 rounded-full bg-brand-red opacity-70"></span> Visita
-          </div>
-          <div className="flex items-center gap-2 text-[10px] text-brand-text-muted">
-             <span className="w-4 h-4 rounded-full border border-white opacity-50 flex items-center justify-center">El tamaño representa xG</span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ShotmapVisualization 
+      shots={shots} 
+      homeTeamName={homeTeam} 
+      awayTeamName={awayTeam} 
+    />
   );
 }

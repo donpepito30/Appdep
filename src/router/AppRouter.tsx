@@ -711,6 +711,7 @@ export function AppRouter({
                             metadata={liveData.metadata}
                             lineups={liveData.lineups}
                             playerStats={liveData.playerStats}
+                            comparison={enrichedData[selectedMatch.id]?.comparison}
                             syncMatchDetail={syncMatchDetail}
                             triggerImmediateSync={triggerImmediateSync}
                           />

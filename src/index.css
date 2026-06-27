@@ -6,6 +6,29 @@
   --font-display: "Outfit", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
+  /* ==========================================================================
+     GUÍA DE USO DEL SISTEMA SEMÁNTICO DE COLOR (PrecisionBet Design System)
+     ==========================================================================
+     
+     1. COLOR SEMÁNTICO:
+        - brand-green (#00ff88):   Solo para POSITIVO — victoria predicha, dato favorable, valor rentable.
+        - brand-blue (#00d4ff):    Solo para INFORMACIONAL — estadísticas neutras, promedios, datos de referencia.
+        - brand-yellow (#ffcc00):  Solo para ADVERTENCIA/EMPATE — predicción de empate, baja confianza, datos parciales.
+        - brand-red (#ff3344):     Solo para NEGATIVO — derrota predicha, alerta de error, dato desfavorable.
+        - brand-purple (#a78bfa):  Solo para AI/IA — análisis narrativos de Gemini, badges de inteligencia, resúmenes predictivos.
+        - brand-orange (#ff8c00):  Solo para TIEMPO REAL (LIVE) — minuto de juego activo, marcador en vivo, punto pulsante.
+
+     2. DIRECTRICES DE USO DE CLASES:
+        - text-brand-green vs text-brand-blue:
+          * Usa `text-brand-green` cuando muestres una predicción ganadora o un indicador de alta probabilidad (>65%).
+          * Usa `text-brand-blue` cuando presentes volumen de córneres, xG general o totales del encuentro de manera informativa.
+        - border-brand-purple:
+          * Aplica `border-brand-purple` y `bg-brand-purple/5` de forma única para encapsular la caja de análisis táctico o el badge "Analizado por IA".
+        - glow/shadow:
+          * Usa sombras con efecto glow (`shadow-[0_0_20px_rgba(...)]`) únicamente al hacer hover en botones de acción primarios, wrappers de iconos, o en badges de alta prioridad ("VALOR DETECTADO").
+
+     ========================================================================== */
+
   /* Custom Colors from Design Specs */
   --color-brand-bg-primary: #050505;
   --color-brand-bg-secondary: #0a0a0a;
@@ -16,6 +39,8 @@
   --color-brand-blue: #00d4ff;
   --color-brand-yellow: #ffcc00;
   --color-brand-red: #ff3344;
+  --color-brand-purple: #a78bfa;
+  --color-brand-orange: #ff8c00;
 
   --color-brand-text-white: #ffffff;
   --color-brand-text-muted: #666666;
@@ -84,6 +109,17 @@
 }
 
 @layer components {
+  /* Icon Scale System */
+  .icon-sm {
+    @apply !w-3 !h-3;
+  }
+  .icon-md {
+    @apply !w-5 !h-5;
+  }
+  .icon-lg {
+    @apply !w-8 !h-8;
+  }
+
   /* Original Icon Style: Squircle with dynamic glow */
   .custom-icon-wrapper {
     @apply relative flex items-center justify-center w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/5 transition-all duration-500 overflow-hidden;
@@ -91,15 +127,59 @@
 
   .custom-icon-wrapper::after {
     content: '';
-    @apply absolute inset-0 bg-brand-green/0 transition-colors duration-500;
+    @apply absolute inset-0 bg-transparent transition-colors duration-500 pointer-events-none;
   }
 
+  /* Default hover (green fallback) */
   .custom-icon-wrapper:hover::after {
     @apply bg-brand-green/5;
   }
 
   .custom-icon-wrapper:hover {
     @apply scale-110 border-brand-green/30 shadow-[0_0_20px_rgba(0,255,136,0.15)];
+  }
+
+  /* Semantic Variants */
+  .custom-icon-wrapper-green:hover::after {
+    @apply bg-brand-green/5;
+  }
+  .custom-icon-wrapper-green:hover {
+    @apply !scale-110 !border-brand-green/30 !shadow-[0_0_20px_rgba(0,255,136,0.15)];
+  }
+
+  .custom-icon-wrapper-blue:hover::after {
+    @apply bg-brand-blue/5;
+  }
+  .custom-icon-wrapper-blue:hover {
+    @apply !scale-110 !border-brand-blue/30 !shadow-[0_0_20px_rgba(0,212,255,0.15)];
+  }
+
+  .custom-icon-wrapper-yellow:hover::after {
+    @apply bg-brand-yellow/5;
+  }
+  .custom-icon-wrapper-yellow:hover {
+    @apply !scale-110 !border-brand-yellow/30 !shadow-[0_0_20px_rgba(255,204,0,0.15)];
+  }
+
+  .custom-icon-wrapper-red:hover::after {
+    @apply bg-brand-red/5;
+  }
+  .custom-icon-wrapper-red:hover {
+    @apply !scale-110 !border-brand-red/30 !shadow-[0_0_20px_rgba(255,51,68,0.15)];
+  }
+
+  .custom-icon-wrapper-purple:hover::after {
+    @apply bg-brand-purple/5;
+  }
+  .custom-icon-wrapper-purple:hover {
+    @apply !scale-110 !border-brand-purple/30 !shadow-[0_0_20px_rgba(167,139,250,0.15)];
+  }
+
+  .custom-icon-wrapper-orange:hover::after {
+    @apply bg-brand-orange/5;
+  }
+  .custom-icon-wrapper-orange:hover {
+    @apply !scale-110 !border-brand-orange/30 !shadow-[0_0_20px_rgba(255,140,0,0.15)];
   }
 
   /* Markdown Tactic Styling */

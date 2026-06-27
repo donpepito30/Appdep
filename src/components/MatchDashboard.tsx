@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Stats, Prediction, OddMarket, Incident, H2HHistory, EventMetadata, LineupData, PlayerMatchStats } from '../types';
 import { XGEvolutionChart } from './Charts';
 import { TeamLogo } from './TeamLogo';
+import { LiveWinBar } from './LiveWinBar';
 import { Activity, Target, Zap, ShieldAlert, BarChart3, TrendingUp, ChevronUp, History, Info, HelpCircle, Swords, RefreshCw, ShieldCheck, Users, Shirt, Sparkles, AlertCircle, MessageSquare, Tv, Crosshair } from 'lucide-react';
 import { SocialTab, BroadcastsTab, ShotmapTab } from './ExtendedTabs';
+import { OddsComparisonVisualization } from './OddsComparisonVisualization';
 import { cn } from '../types';
 import { api, getImgUrl } from '../services/api';
 import { generateMatchPreview } from '../lib/gemini';
@@ -52,6 +54,7 @@ interface DashboardProps {
   playerStats: PlayerMatchStats[];
   syncMatchDetail?: (id: string, options: { stats?: boolean; slow?: boolean; forms?: boolean }) => Promise<void>;
   triggerImmediateSync?: (matchId: string) => void;
+  comparison?: any;
 }
 
 interface AdvancedStats {
@@ -69,9 +72,9 @@ interface AdvancedStats {
   duelsWonPercent: number;
 }
 
-type DashboardTab = 'summary' | 'predictions' | 'stats' | 'h2h' | 'lineups' | 'shotmap';
+type DashboardTab = 'summary' | 'predictions' | 'stats' | 'h2h' | 'lineups' | 'shotmap' | 'oddsComparison';
 
-export function MatchDashboard({ match, stats, prediction, odds, incidents, momentum, lastStats, metadata, lineups, playerStats, syncMatchDetail, triggerImmediateSync }: DashboardProps) {
+export function MatchDashboard({ match, stats, prediction, odds, incidents, momentum, lastStats, metadata, lineups, playerStats, syncMatchDetail, triggerImmediateSync, comparison }: DashboardProps) {
   const [activeTab, setActiveTab] = React.useState<DashboardTab>('summary');
   
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -369,6 +372,11 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
         </div>
       </div>
 
+      {/* Live Win Probability Bar (Always displayed before tabs if live or active prediction exists) */}
+      {(match.status === 'LIVE' || !!prediction) && (
+        <LiveWinBar match={match as any} prediction={prediction} />
+      )}
+
       <div 
         role="tablist"
         aria-label="Match analysis navigation"
@@ -378,6 +386,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
           {[
             { id: 'summary', label: 'Panel Principal', icon: Activity },
             { id: 'predictions', label: 'Predicciones', icon: Zap },
+            { id: 'oddsComparison', label: 'Comparar Cuotas', icon: TrendingUp },
             { id: 'h2h', label: 'Historial H2H', icon: Swords },
             { id: 'stats', label: 'Analítica Avanzada', icon: BarChart3 },
             { id: 'lineups', label: 'Alineaciones', icon: Users },
@@ -428,8 +437,20 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
             transition={{ duration: 0.2 }}
             className="space-y-6 pb-20 md:pb-12"
           >
+            {activeTab === 'oddsComparison' && (
+              <OddsComparisonVisualization 
+                comparison={comparison}
+                odds={odds}
+                prediction={prediction}
+                match={match as any}
+              />
+            )}
             {activeTab === 'shotmap' && (
-              <ShotmapTab eventId={match.id} />
+              <ShotmapTab 
+                eventId={match.id} 
+                homeTeam={match.homeTeam} 
+                awayTeam={match.awayTeam} 
+              />
             )}
             {activeTab === 'h2h' && (
               <div className="space-y-6">
