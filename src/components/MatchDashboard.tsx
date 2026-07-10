@@ -306,70 +306,138 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
     );
   };
 
+  const isCollapsed = scrollStats.scrollTop > 20;
+
   return (
     <div ref={dashboardRef} className="flex-1 flex flex-col bg-brand-bg-primary min-h-0 min-w-0 w-full overflow-hidden font-sans">
       {/* Persistent Match Header */}
-      <div className="bg-brand-bg-card/80 backdrop-blur-md border-b border-white/5 px-4 md:px-6 py-4 md:py-8 relative z-50 shrink-0 w-full overflow-hidden">
+      <div className={cn(
+        "bg-brand-bg-card/80 backdrop-blur-md border-b border-white/5 px-4 md:px-6 relative z-50 shrink-0 w-full overflow-hidden transition-all duration-300 ease-in-out",
+        isCollapsed ? "py-1.5 md:py-3.5 shadow-lg bg-brand-bg-card/95" : "py-3.5 md:py-8"
+      )}>
         <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
-        <div className="flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-3 md:gap-8 relative z-10 w-full">
+        
+        {/* Desktop Version (hidden on mobile) */}
+        <div className="hidden md:flex flex-row items-center justify-between max-w-6xl mx-auto gap-8 relative z-10 w-full">
           {/* Team Home */}
-          <div className="w-full md:flex-1 flex flex-col items-center md:flex-row md:justify-end gap-3 min-w-0 order-2 md:order-1">
+          <div className="flex-1 flex flex-row justify-end items-center gap-3 min-w-0">
+            <div className="flex flex-col items-end min-w-0 notranslate" translate="no">
+              <h2 className={cn("font-display font-black tracking-tight text-brand-text-white text-right whitespace-normal break-words leading-tight mb-1 max-w-xs", (match.homeTeam || '').length > 12 ? 'text-sm' : 'text-base')}>{match.homeTeam}</h2>
+              <div className="flex items-center gap-2">
+                 <div className="h-3 w-[2px] bg-brand-green" />
+                 <span className="text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] whitespace-normal">{match.leagueName || 'Match Intel'}</span>
+              </div>
+            </div>
             <div className="shrink-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: match.homeLogo, leagueId: match.leagueId }); }}>
               <div className="w-12 h-12 bg-black/40 rounded-xl p-1.5 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
                 <TeamLogo name={match.homeTeam} logoUrl={match.homeLogo} size="md" className="w-full h-full object-contain" />
               </div>
             </div>
-            <div className="flex flex-col items-center md:items-end min-w-0 notranslate" translate="no">
-              <h2 className={cn("font-display font-black tracking-tight text-brand-text-white text-center whitespace-normal break-words leading-tight mb-1 max-w-[160px] sm:max-w-xs", (match.homeTeam || '').length > 12 ? 'text-xs' : 'text-sm')}>{match.homeTeam}</h2>
-              <div className="flex items-center gap-1.5 md:gap-2">
-                 <div className="h-2.5 md:h-3 w-[2px] bg-brand-green" />
-                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] whitespace-normal">{match.leagueName || 'Match Intel'}</span>
-              </div>
-            </div>
           </div>
 
           {/* Score & Meta */}
-          <div className="flex flex-col items-center shrink-0 order-1 md:order-2 mb-1 md:mb-0">
-            <div className="flex items-center gap-4 md:gap-6 lg:gap-10">
-              <div className="text-2xl xs:text-4xl md:text-6xl lg:text-7xl font-black font-display font-tabular tracking-tighter text-brand-text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                {match.homeScore}<span className="text-brand-text-muted/50 mx-2 md:mx-4 font-medium">-</span>{match.awayScore}
+          <div className="flex flex-col items-center shrink-0">
+            <div className="flex items-center gap-10">
+              <div className="text-6xl lg:text-7xl font-black font-display font-tabular tracking-tighter text-brand-text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                {match.homeScore}<span className="text-brand-text-muted/50 mx-4 font-medium">-</span>{match.awayScore}
               </div>
             </div>
             {match.status === 'LIVE' && (
-              <div className="flex items-center mt-1 md:mt-3 px-2 md:px-3 py-0.5 md:py-1 bg-brand-red/10 rounded-full border border-brand-red/20">
-                <span className="relative flex h-1 w-1 md:h-2 md:w-2 mr-1 md:mr-2">
+              <div className="flex items-center mt-3 px-3 py-1 bg-brand-red/10 rounded-full border border-brand-red/20">
+                <span className="relative flex h-2 w-2 mr-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-full w-full bg-brand-red"></span>
                 </span>
-                <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] font-mono font-black text-brand-red uppercase tracking-widest whitespace-nowrap flex items-center gap-1">
+                <span className="text-[10px] lg:text-[11px] font-mono font-black text-brand-red uppercase tracking-widest whitespace-nowrap flex items-center gap-1">
                   <span>{match.currentMinute}'</span>
                   <span>EN VIVO</span>
                 </span>
               </div>
             )}
             {match.status === 'FINISHED' && (
-              <div className="mt-1 md:mt-3 px-2 md:px-3 py-0.5 md:py-1 bg-white/5 rounded-full border border-white/10">
-                <span className="text-[7px] xs:text-[8px] md:text-[10px] uppercase font-black text-brand-text-muted tracking-[0.2em] whitespace-nowrap">Finalizado</span>
+              <div className="mt-3 px-3 py-1 bg-white/5 rounded-full border border-white/10">
+                <span className="text-[10px] uppercase font-black text-brand-text-muted tracking-[0.2em] whitespace-nowrap">Finalizado</span>
               </div>
             )}
           </div>
 
           {/* Team Away */}
-          <div className="w-full md:flex-1 flex flex-col items-center md:items-start md:flex-row md:justify-start gap-3 min-w-0 order-3">
-            <div className="flex flex-col items-center md:items-start min-w-0 notranslate order-2 md:order-1" translate="no">
-              <h2 className={cn("font-display font-black tracking-tight text-brand-text-white text-center whitespace-normal break-words leading-tight mb-1 max-w-[160px] sm:max-w-xs", (match.awayTeam || '').length > 12 ? 'text-xs' : 'text-sm')}>{match.awayTeam}</h2>
-              <div className="flex items-center gap-1.5 md:gap-2">
-                 <span className="text-[7px] xs:text-[8px] md:text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] whitespace-normal">Visita</span>
-                 <div className="h-2.5 md:h-3 w-[2px] bg-brand-text-muted/30" />
-              </div>
-            </div>
-            <div className="shrink-0 group cursor-pointer order-1 md:order-2" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId }); }}>
+          <div className="flex-1 flex flex-row justify-start items-center gap-3 min-w-0">
+            <div className="shrink-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId }); }}>
               <div className="w-12 h-12 bg-black/40 rounded-xl p-1.5 border border-white/5 group-hover:scale-105 group-hover:border-brand-green/30 transition-all duration-500 shadow-2xl">
                 <TeamLogo name={match.awayTeam} logoUrl={match.awayLogo} size="md" className="w-full h-full object-contain" />
               </div>
             </div>
+            <div className="flex flex-col items-start min-w-0 notranslate" translate="no">
+              <h2 className={cn("font-display font-black tracking-tight text-brand-text-white text-left whitespace-normal break-words leading-tight mb-1 max-w-xs", (match.awayTeam || '').length > 12 ? 'text-sm' : 'text-base')}>{match.awayTeam}</h2>
+              <div className="flex items-center gap-2">
+                 <span className="text-[10px] lg:text-[11px] text-brand-text-muted uppercase font-black tracking-[0.2em] whitespace-normal">Visita</span>
+                 <div className="h-3 w-[2px] bg-brand-text-muted/30" />
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* Mobile Version (Ultra-compact, horizontal to maximize vertical scroll area) */}
+        <div className="flex md:hidden flex-row items-center justify-between relative z-10 w-full gap-2 px-1">
+          {/* Team Home */}
+          <div className="flex-1 flex flex-row items-center justify-end gap-1.5 min-w-0 cursor-pointer" onClick={() => openTeamModal({ id: match.homeTeamId, name: match.homeTeam, logo: match.homeLogo, leagueId: match.leagueId })}>
+            <span className={cn(
+              "font-black text-brand-text-white text-right truncate transition-all duration-300",
+              isCollapsed ? "text-[10px] max-w-[70px] xs:max-w-[100px]" : "text-xs max-w-[85px] xs:max-w-[120px]"
+            )}>
+              {match.homeTeam}
+            </span>
+            <div className={cn(
+              "bg-black/40 rounded-lg p-1 border border-white/5 shrink-0 transition-all duration-300",
+              isCollapsed ? "w-6 h-6 p-0.5 rounded-md" : "w-8 h-8"
+            )}>
+              <TeamLogo name={match.homeTeam} logoUrl={match.homeLogo} size="md" className="w-full h-full object-contain" />
+            </div>
+          </div>
+
+          {/* Score, Status & Minute */}
+          <div className="flex flex-col items-center justify-center shrink-0 min-w-[70px]">
+            <div className={cn(
+              "font-black font-display font-tabular tracking-tighter text-brand-text-white transition-all duration-300",
+              isCollapsed ? "text-base" : "text-xl xs:text-2xl"
+            )}>
+              {match.homeScore}<span className="text-brand-text-muted/50 mx-1.5 font-medium">-</span>{match.awayScore}
+            </div>
+            <div className={cn(
+              "transition-all duration-300 flex items-center justify-center overflow-hidden",
+              isCollapsed ? "h-0 opacity-0 mt-0" : "h-auto opacity-100 mt-0.5"
+            )}>
+              {match.status === 'LIVE' ? (
+                <span className="text-[8px] font-mono font-black text-brand-red uppercase tracking-wider flex items-center gap-0.5 bg-brand-red/10 border border-brand-red/15 px-1 rounded whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
+                  <span>{match.currentMinute}' EN VIVO</span>
+                </span>
+              ) : match.status === 'FINISHED' ? (
+                <span className="text-[8px] font-black text-brand-text-muted uppercase tracking-wider whitespace-nowrap">Fin</span>
+              ) : (
+                <span className="text-[8px] font-black text-brand-text-muted uppercase tracking-wider whitespace-nowrap">VS</span>
+              )}
+            </div>
+          </div>
+
+          {/* Team Away */}
+          <div className="flex-1 flex flex-row items-center justify-start gap-1.5 min-w-0 cursor-pointer" onClick={() => openTeamModal({ id: match.awayTeamId, name: match.awayTeam, logo: match.awayLogo, leagueId: match.leagueId })}>
+            <div className={cn(
+              "bg-black/40 rounded-lg p-1 border border-white/5 shrink-0 transition-all duration-300",
+              isCollapsed ? "w-6 h-6 p-0.5 rounded-md" : "w-8 h-8"
+            )}>
+              <TeamLogo name={match.awayTeam} logoUrl={match.awayLogo} size="md" className="w-full h-full object-contain" />
+            </div>
+            <span className={cn(
+              "font-black text-brand-text-white text-left truncate transition-all duration-300",
+              isCollapsed ? "text-[10px] max-w-[70px] xs:max-w-[100px]" : "text-xs max-w-[85px] xs:max-w-[120px]"
+            )}>
+              {match.awayTeam}
+            </span>
+          </div>
+        </div>
+
       </div>
 
       {/* Live Win Probability Bar (Always displayed before tabs if live or active prediction exists) */}
@@ -425,7 +493,7 @@ export function MatchDashboard({ match, stats, prediction, odds, incidents, mome
         <div 
           ref={contentScrollRef}
           onScroll={handleScroll}
-          className="flex-1 min-h-0 overflow-y-scroll p-4 md:p-6 scroll-smooth touch-scroll" 
+          className="flex-1 min-h-0 overflow-y-scroll p-4 md:p-6 scroll-smooth touch-scroll scrollbar-hide" 
           style={{ paddingBottom: '80px' }}
         >
         <AnimatePresence mode="wait">

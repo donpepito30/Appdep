@@ -688,7 +688,7 @@ export function AppRouter({
               className="flex-1 flex flex-col w-full min-h-0 relative"
             >
               {showSidebar && selectedMatch ? (
-                <div className="flex-1 flex flex-col relative w-full h-full">
+                <div className="flex-1 flex flex-col relative w-full min-h-0">
                   <button 
                     onClick={() => setSelectedMatchId(null)}
                     className="md:hidden p-4 flex items-center space-x-2 text-brand-text-muted hover:text-brand-text-white font-bold text-[10px] uppercase tracking-widest bg-brand-bg-card/80 backdrop-blur-md border-b border-brand-border shrink-0 z-50 sticky top-0"
