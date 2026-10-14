@@ -1,63 +1,23 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { GoogleGenAI } from "@google/genai";
+import cors from "cors";
 import { calculateHybridPrediction, transformToForm } from '../src/lib/prediction';
 import { getStats, getPrediction, getOdds, getFixtures } from '../src/services/apiServer';
 
+/**
+ * MatchIntel Elite - Serverless Backend (Vercel)
+ * Architecture: TypeScript / Express / Google Gen AI
+ */
+
 const app = express();
 
-// Middleware global para CORS y X-Request-Id
-app.use((req, res, next) => {
-  // 1. X-Request-Id para trazabilidad de logs
-  const requestId = req.headers['x-request-id'] || Math.random().toString(36).substring(2, 15);
-  res.setHeader('X-Request-Id', requestId);
-
-  // 2. CORS dinámico aceptando localhost y ALLOWED_ORIGIN de producción
-  const origin = req.headers.origin;
-  const allowedOrigin = process.env.ALLOWED_ORIGIN;
-  
-  if (origin) {
-    const isLocalhost = origin.startsWith('http://localhost:') || origin === 'http://localhost' || origin.startsWith('http://127.0.0.1:');
-    const isAllowedEnv = allowedOrigin && origin === allowedOrigin;
-    
-    if (isLocalhost || isAllowedEnv) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-    }
-  }
-
-  // Preflight OPTIONS handler
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  next();
-});
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ── Rate Limiter en memoria para Serverless (warm starts) ──────────────────
-// NOTA DE LIMITACIÓN EN SERVERLESS: Al ser un entorno stateless (Serverless Functions),
-// este Map se almacena en la memoria de la instancia de ejecución.
-// Esto proporciona una protección contra abusos de "soft limit" por contenedor (warm starts),
-// aunque múltiples instancias escaladas en paralelo tendrán sus propios contadores individuales.
+// ── Rate Limiter (In-memory for Lambda context) ─────────────────────────
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW = 60 * 1000;
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
-  
-  // Pruning preventivo para evitar fugas de memoria en contenedores activos
-  for (const [key, val] of rateLimitMap.entries()) {
-    if (now > val.resetAt) {
-      rateLimitMap.delete(key);
-    }
-  }
-
   const entry = rateLimitMap.get(ip);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
@@ -67,25 +27,36 @@ function checkRateLimit(ip: string): boolean {
   entry.count++;
   return true;
 }
-// ─────────────────────────────────────────────────────────────────────────
 
-// Initialize AI
-const getGenAI = () => {
+// ── Dynamic CORS Configuration ──────────────────────────────────────────
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://ais-dev-icl7susd67gcpapakzyupo-34447954721.us-west2.run.app",
+  "https://ais-pre-icl7susd67gcpapakzyupo-34447954721.us-west2.run.app"
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.includes(".run.app") || origin.includes(".vercel.app")) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-forwarded-for"]
+}));
+
+app.use(express.json());
+
+// ── Gemini AI Initialization ────────────────────────────────────────────
+const initGenAI = () => {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (apiKey && apiKey !== 'undefined' && apiKey.length > 5) {
-    return new GoogleGenAI({ 
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
-  return null;
+  return (apiKey && apiKey.length > 5) ? new GoogleGenAI({ apiKey }) : null;
 };
+const ai = initGenAI();
 
-// Simple Retry Utility para Gemini
+// ── Utilities ───────────────────────────────────────────────────────────
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, delay = 1000): Promise<T> {
   let lastError: any;
   for (let i = 0; i <= maxRetries; i++) {
@@ -93,476 +64,153 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, delay = 1000):
       return await fn();
     } catch (error: any) {
       lastError = error;
-      const isTransient = error?.message?.includes('503') || error?.status === 503 || error?.message?.includes('high demand');
+      const isTransient = error?.status === 429 || error?.status >= 500 || error?.message?.includes('503');
       if (!isTransient || i === maxRetries) break;
-      console.warn(`[AI Retry] Attempt ${i + 1} failed. Retrying in ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
     }
   }
   throw lastError;
 }
 
-// ── Cache AI persistente en memoria ─────────────────────────────────────
-const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 horas
 const aiCache = new Map<string, { text: string; timestamp: number }>();
-
-function saveAiCache(cache: Map<string, { text: string; timestamp: number }>) {
-  const now = Date.now();
-  for (const [k, v] of cache.entries()) {
-    if (now - v.timestamp >= CACHE_TTL) {
-      cache.delete(k);
-    }
-  }
-}
-// ─────────────────────────────────────────────────────────────────────────
-
-// ── Caché para Predicciones Congeladas ───────────────────────────────────
-const FROZEN_TTL = 24 * 60 * 60 * 1000; // 24 horas
+const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 hours
 const frozenCache = new Map<string, any>();
-const frozenTimestamps = new Map<string, number>();
 
-function saveFrozenCache(cache: Map<string, any>) {
-  const now = Date.now();
-  for (const k of cache.keys()) {
-    if (!frozenTimestamps.has(k)) {
-      frozenTimestamps.set(k, now);
-    }
-  }
-  for (const [k, ts] of frozenTimestamps.entries()) {
-    if (now - ts >= FROZEN_TTL) {
-      cache.delete(k);
-      frozenTimestamps.delete(k);
-    }
-  }
-}
-// ─────────────────────────────────────────────────────────────────────────
+// ── Endpoints ───────────────────────────────────────────────────────────
 
-function buildAutoFallback(homeTeam: string, awayTeam: string, prediction: any): string {
-  const homePct = Math.round((prediction.homeWinProb || 0) * 100);
-  const drawPct = Math.round((prediction.drawProb || 0) * 100);
-  const awayPct = Math.round((prediction.awayWinProb || 0) * 100);
-  const score = prediction.scoreline || '1-1';
-  
-  return `### Análisis Táctico Automático
-**Datos del sistema:**
-- ${homeTeam}: ${homePct}% de probabilidad de victoria.
-- ${awayTeam}: ${awayPct}% de probabilidad de victoria.
-- Empate: ${drawPct}%.
-- Marcador proyectado: **${score}**.
-
-**Claves:**
-- El sistema estima que ${homeTeam} tiene un ${homePct > awayPct ? 'mayor' : 'menor'} potencial ofensivo basado en su forma reciente.
-- ${awayTeam} muestra ${awayPct > homePct ? 'mayor' : 'menor'} solidez defensiva en los últimos partidos.
-- La tendencia de ambos equipos sugiere un partido ${parseInt(score.split('-')[0]) + parseInt(score.split('-')[1]) > 2 ? 'con goles' : 'táctico y cerrado'}.
-
-**Veredicto:** Se espera un marcador de **${score}** según el modelo estadístico.`;
-}
-
-// Endpoint: Obtener y congelar predicciones
-app.post("/api/prediction/freeze", async (req, res) => {
+// [POST] /api/prediction/freeze
+app.post("/api/prediction/freeze", async (req: Request, res: Response) => {
   const { eventId, homeTeamId, awayTeamId } = req.body;
-  if (!eventId) {
-    return res.status(400).json({ error: "eventId es requerido" });
-  }
+  if (!eventId) return res.status(400).json({ error: "eventId is required" });
 
   const apiKey = process.env.BZZOIRO_API_KEY || '';
-
-  // Intentar obtener de la caché en memoria (precargada)
-  if (frozenCache.has(String(eventId))) {
-    const cached = frozenCache.get(String(eventId));
-    return res.json({ prediction: cached });
-  }
+  if (frozenCache.has(String(eventId))) return res.json({ prediction: frozenCache.get(String(eventId)) });
 
   try {
-    // 1. Obtener Stats, Predicción original y Cuotas
     const statsPromise = apiKey ? getStats(eventId, apiKey) : Promise.resolve(null);
     const predictionPromise = apiKey ? getPrediction(eventId, apiKey) : Promise.resolve(null);
     const oddsPromise = apiKey ? getOdds(eventId, apiKey) : Promise.resolve(null);
-    
+
     let homeFixtures: any[] = [];
     let awayFixtures: any[] = [];
     if (apiKey && homeTeamId && awayTeamId) {
-      homeFixtures = await getFixtures(String(homeTeamId), apiKey, 180, 10);
-      awayFixtures = await getFixtures(String(awayTeamId), apiKey, 180, 10);
+      [homeFixtures, awayFixtures] = await Promise.all([
+        getFixtures(String(homeTeamId), apiKey, 180, 10),
+        getFixtures(String(awayTeamId), apiKey, 180, 10)
+      ]);
     }
 
-    const [stats, mlPrediction, odds] = await Promise.all([
-      statsPromise,
-      predictionPromise,
-      oddsPromise
-    ]);
+    const [stats, mlPrediction, odds] = await Promise.all([statsPromise, predictionPromise, oddsPromise]);
+    const teamForms = {
+      home: homeTeamId ? transformToForm(homeFixtures, String(homeTeamId)) : null,
+      away: awayTeamId ? transformToForm(awayFixtures, String(awayTeamId)) : null
+    };
 
-    // Conversión a TeamForm
-    const homeForm = homeTeamId ? transformToForm(homeFixtures, String(homeTeamId)) : null;
-    const awayForm = awayTeamId ? transformToForm(awayFixtures, String(awayTeamId)) : null;
-    const teamForms = { home: homeForm, away: awayForm };
-
-    // Calcular predicción híbrida inicial para congelar
     const finalPrediction = calculateHybridPrediction(
-      String(eventId),
-      stats,
-      mlPrediction?.prediction || mlPrediction,
-      odds,
-      teamForms,
-      0, // Minuto 0 de baseline
-      { home: 0, away: 0 }
+      String(eventId), stats, mlPrediction?.prediction || mlPrediction, odds, teamForms, 0, { home: 0, away: 0 }
     );
 
-    // Guardar en la caché y persistir en memoria
     frozenCache.set(String(eventId), finalPrediction);
-    saveFrozenCache(frozenCache);
-
     return res.json({ prediction: finalPrediction });
-  } catch (error: any) {
-    console.warn(`[Freeze Endpoint Serverless] Fallback local para ${eventId} por error o falta de API key:`, error.message || error);
-    
-    const fallbackPrediction = {
-      homeWinProb: 0.38,
-      drawProb: 0.28,
-      awayWinProb: 0.34,
-      source: 'FALLBACK_FREEZE',
-      confidence: 0.5,
-      scoreline: '1-1',
-      btts: false,
-      bttsProb: 0.5,
-      over25Prob: 0.5
-    } as any;
-
-    frozenCache.set(String(eventId), fallbackPrediction);
-    saveFrozenCache(frozenCache);
-
-    return res.json({ prediction: fallbackPrediction });
+  } catch (error) {
+    console.log(`[Freeze Fallback] Triggered for ${eventId}`);
+    return res.json({
+      prediction: {
+        homeWinProb: 0.35, drawProb: 0.30, awayWinProb: 0.35,
+        source: 'STATIC_FALLBACK', confidence: 0.4, scoreline: '1-1',
+        btts: true, bttsProb: 0.52, over25Prob: 0.48
+      }
+    });
   }
 });
 
-// AI Endpoint: Match Preview
-app.post("/api/ai/preview", async (req, res) => {
-  const clientIp = req.headers['x-forwarded-for']
-    ?.toString().split(',')[0].trim() 
-    || req.socket.remoteAddress 
-    || 'unknown';
-  if (!checkRateLimit(clientIp)) {
-    return res.status(429).json({ 
-      error: 'Demasiadas solicitudes. Intenta en 60 segundos.' 
-    });
+// [POST] /api/ai/preview
+app.post("/api/ai/preview", async (req: Request, res: Response) => {
+  const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || 'unknown';
+  if (!checkRateLimit(ip)) return res.status(429).json({ error: 'Rate limit (10/min)' });
+
+  const { homeTeam, awayTeam, homeRecentForm, awayRecentForm, h2hSummary, matchId, prediction } = req.body;
+  const cacheKey = `preview_${matchId || `${homeTeam}-${awayTeam}`}`;
+
+  if (aiCache.has(cacheKey)) {
+    const cached = aiCache.get(cacheKey);
+    if (Date.now() - cached!.timestamp < CACHE_TTL) return res.json({ text: cached!.text });
   }
 
-  const { homeTeam, awayTeam, homeRecentForm, awayRecentForm, h2hSummary, matchId, injuredPlayers, prediction } = req.body;
-  
-  // Check Cache
-  if (matchId && aiCache.has(`preview_${matchId}`)) {
-    const cached = aiCache.get(`preview_${matchId}`);
-    if (Date.now() - cached!.timestamp < CACHE_TTL) {
-      return res.json({ text: cached!.text });
-    }
-  }
-
-  const client = getGenAI();
   let targetScore = "1-1";
-  if (prediction && prediction.scoreline && prediction.scoreline !== '?-?') {
+  if (prediction?.scoreline && prediction.scoreline !== '?-?' && !prediction.scoreline.includes('?')) {
     targetScore = prediction.scoreline.replace(':', '-');
   }
-  
-  if (!client) {
-    return res.json({ 
-      text: `### Análisis Táctico
- 
- **Contexto:** Encuentro de alta intensidad. La forma reciente favorece al local por su solidez en la fase de construcción.
- 
- **Puntos Clave:**
- - **Presión:** El equipo local buscará forzar errores en la salida rival.
- - **Transición:** El visitante dependerá de la velocidad por bandas.
- - **Zona de Conflicto:** El mediocampo será decisivo para el control del ritmo.
- 
- **Marcador Proyectado:** **${targetScore}**.` 
-    });
+
+  if (!ai) {
+    return res.json({ text: `### Análisis Táctico\n\nPartido entre **${homeTeam}** y **${awayTeam}**. Se espera un duelo táctico cerrado.\n\n**Marcador Proyectado**: **${targetScore}**.` });
   }
 
   try {
-    let injuriesPrompt = "";
-    if (injuredPlayers && Array.isArray(injuredPlayers) && injuredPlayers.length > 0) {
-      injuriesPrompt = `- Jugadores lesionados / ausentes o no disponibles para el encuentro:
-` + injuredPlayers.map((p: any) => `        * ${p.team === 'home' ? homeTeam : awayTeam}: ${p.name} (${p.position}${p.reason ? ` - ${p.reason}` : ''})`).join('\n');
-    }
-
-    let predictionPrompt = "";
-    if (prediction) {
-      const homeWinPct = Math.round((prediction.homeWinProb || 0) * 100);
-      const drawPct = Math.round((prediction.drawProb || 0) * 100);
-      const awayWinPct = Math.round((prediction.awayWinProb || 0) * 100);
-
-      predictionPrompt = `
-      IMPORTANTE (REQUISITO DE CONSISTENCIA ABSOLUTA):
-      Nuestro sistema estadístico ha calculado estas probabilidades numéricas precisas para este partido:
-      - Probabilidades de resultado 1X2: ${homeWinPct}% de victoria para ${homeTeam}, ${drawPct}% de empate, ${awayWinPct}% de victoria para ${awayTeam}.
-      - MARCADOR PROYECTADO EXACTO DEL SISTEMA: ${targetScore} (${homeTeam} marcará ${targetScore.split('-')[0]}, ${awayTeam} marcará ${targetScore.split('-')[1]}).
-      
-      Es un requisito obligatorio que tu análisis, tono y veredicto estén perfectamente alineados con estos datos:
-      1. Tu análisis debe justificar por qué se daría este resultado estimado por la probabilidad mayor o tendencia.
-      2. En la sección "Veredicto", DEBES DECLARAR COMO MARCADOR PROYECTADO EXACTO el valor **${targetScore}** (formato negrita, ej: "**${targetScore}**"). No inventes, calcules ni propongas ningún otro marcador.
-      `;
-    }
-
-    const prompt = `
-      Actúa como un analista experto en fútbol internacional. Genera un análisis táctico conciso y profesional para el partido: ${homeTeam} vs ${awayTeam}.
-      
-      DATOS:
-      - Forma ${homeTeam}: ${homeRecentForm.join(', ')}
-      - Forma ${awayTeam}: ${awayRecentForm.join(', ')}
-      - Historial: ${h2hSummary}
-      ${injuriesPrompt ? `\n        ${injuriesPrompt}` : ''}
-      ${predictionPrompt}
-      
-      ESTRUCTURA (Markdown):
-      1. **Contexto**: Breve análisis del momento actual (considerando posibles bajas importantes).
-      2. **Claves Tácticas**: 3 puntos sobre sistemas o roles.
-      3. **Figuras a Seguir**: Jugadores determinantes.
-      4. **Mercados de Valor**: Recomendaciones estadísticas.
-      5. **Veredicto**: Marcador proyectado final en negrita coincidiendo exactamente con el marcador del sistema (**${targetScore}**) y breve conclusión que explique tácticamente por qué se daría ese resultado exacto.
-      
-      REGLAS:
-      - Idioma: ESPAÑOL.
-      - Sé directo, evita introducciones y lenguaje técnico innecesario.
-    `;
-    
-    const response = await withRetry(() => client.models.generateContent({
+    const prompt = `Analista experto de MatchIntel Elite. PARTIDO: ${homeTeam} vs ${awayTeam}. FORMA: ${homeRecentForm?.join(', ')} vs ${awayRecentForm?.join(', ')}. H2H: ${h2hSummary}. PREDICCIÓN: ${targetScore}. Genera contexto, 3 claves tácticas y veredicto que justifique el ${targetScore}. Idioma: ESPAÑOL. Sin introducciones.`;
+    const result: any = await withRetry(() => ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }]
     }));
-    
-    const resultText = response.text || "";
-    
-    // Cache Result
-    if (matchId) {
-      aiCache.set(`preview_${matchId}`, { text: resultText, timestamp: Date.now() });
-      saveAiCache(aiCache);
-    }
-
-    res.json({ text: resultText });
-  } catch (error: any) {
-    const cacheKey = matchId ? String(matchId) : `${homeTeam}-${awayTeam}`;
-
-    const textFallback = `### Análisis Táctico de Encuentro
-**Contexto**: Encuentro de alta intensidad estratégica entre **${homeTeam}** y **${awayTeam}**. El análisis de forma reciente favorece un duelo muy táctico.
-
-**Puntos Clave**:
-- **Estabilidad**: El equipo local buscará establecer el control defensivo y regularizar la salida rival.
-- **Transición**: El visitante dependerá de la construcción rápida por bandas y transiciones ofensivo-defensivas muy veloces.
-- **Zona de Tensión**: El sector medio será el eje estratégico para dominar el tiempo de juego.
-
-**Figuras a Seguir**: Volantes defensivos, creativos y extremos veloces.
-**Marcador Proyectado**: **${targetScore}** según la predicción analítica de rendimiento del sistema.`;
-
-    console.log(`[AI Preview Serverless] Using stable fallback for preview_${cacheKey} due to temporary API constraints.`);
-
-    aiCache.set(`preview_${cacheKey}`, { text: textFallback, timestamp: Date.now() });
-    saveAiCache(aiCache);
-    if (matchId && String(matchId) !== cacheKey) {
-      aiCache.set(`preview_${matchId}`, { text: textFallback, timestamp: Date.now() });
-      saveAiCache(aiCache);
-    }
-
-    return res.json({ text: textFallback });
+    const text = result.text;
+    aiCache.set(cacheKey, { text, timestamp: Date.now() });
+    return res.json({ text });
+  } catch (error) {
+    console.log(`[AI Preview Fallback] Active for ${homeTeam}`);
+    return res.json({ text: `### Análisis de MatchIntel\n\nEncuentro competitivo entre **${homeTeam}** y **${awayTeam}**. La tendencia favorece un juego de alta intensidad.\n\n**Marcador Proyectado**: **${targetScore}**.` });
   }
 });
 
-// AI Endpoint: Prediction Analysis
-app.post("/api/ai/analysis", async (req, res) => {
-  const clientIp = req.headers['x-forwarded-for']
-    ?.toString().split(',')[0].trim() 
-    || req.socket.remoteAddress 
-    || 'unknown';
-  if (!checkRateLimit(clientIp)) {
-    return res.status(429).json({ 
-      error: 'Demasiadas solicitudes. Intenta en 60 segundos.' 
-    });
-  }
+// [POST] /api/ai/analysis
+app.post("/api/ai/analysis", async (req: Request, res: Response) => {
+  const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || 'unknown';
+  if (!checkRateLimit(ip)) return res.status(429).json({ error: 'Rate limit exceeded' });
 
   const stats = req.body;
-  const matchId = stats.matchId;
+  const cacheKey = `analysis_${stats.matchId || stats.homeTeam}`;
 
-  // Check Cache
-  if (matchId && aiCache.has(`analysis_${matchId}`)) {
-    const cached = aiCache.get(`analysis_${matchId}`);
-    if (Date.now() - cached!.timestamp < CACHE_TTL) {
-      return res.json({ text: cached!.text });
-    }
+  if (aiCache.has(cacheKey)) {
+    const cached = aiCache.get(cacheKey);
+    if (Date.now() - cached!.timestamp < CACHE_TTL) return res.json({ text: cached!.text });
   }
 
-  const client = getGenAI();
-  let targetScore = stats.projectedScore || "1-1";
-  targetScore = targetScore.replace(':', '-');
-  
-  if (!targetScore || targetScore === '?-?' || targetScore.includes('?')) {
-    const prob = stats.topProb || 0.5;
-    const market = String(stats.topMarket || '').toLowerCase();
-    if (market.includes('local') || market.includes('home') || market.includes('1')) {
-      targetScore = prob >= 0.70 ? "3-0" : (prob >= 0.55 ? "2-0" : "2-1");
-    } else if (market.includes('visitante') || market.includes('away') || market.includes('2')) {
-      targetScore = prob >= 0.70 ? "0-3" : (prob >= 0.55 ? "0-2" : "1-2");
-    } else if (market.includes('empate') || market.includes('draw') || market.includes('x')) {
-      targetScore = "1-1";
-    } else {
-      targetScore = "1-1";
-    }
-  }
-  
-  if (!client) {
-    return res.json({
-      text: `### Justificación Técnica
-  
- **Análisis:** La probabilidad para **${stats.topMarket}** se fundamenta en la convergencia de xG (${stats.homeXG.toFixed(1)}) y la eficiencia ofensiva actual.
- 
- **Puntos Clave:**
- - **Ofensiva**: Volumen superior al promedio esperado.
- - **Defensa**: Vulnerabilidad en las transiciones defensivas.
- 
- **Marcador Proyectado:** **${targetScore}**.`
-    });
+  let targetScore = stats.projectedScore?.replace(':', '-') || "1-1";
+  if (targetScore === '?-?' || targetScore.includes('?')) targetScore = "1-1";
+
+  if (!ai) {
+    return res.json({ text: `### Justificación Estadística\n\nEl mercado **${stats.topMarket}** se fundamenta en las métricas de xG proyectadas.\n\n**Marcador**: **${targetScore}**.` });
   }
 
   try {
-    let injuriesPrompt = "";
-    if (stats.injuredPlayers && Array.isArray(stats.injuredPlayers) && stats.injuredPlayers.length > 0) {
-      injuriesPrompt = `- Jugadores lesionados / ausentes u no disponibles:
-` + stats.injuredPlayers.map((p: any) => `        * ${p.team === 'home' ? stats.homeTeam : stats.awayTeam}: ${p.name} (${p.position}${p.reason ? ` - ${p.reason}` : ''})`).join('\n');
-    }
-
-    let consistencyPrompt = "";
-    if (targetScore) {
-      consistencyPrompt = `
-      REGLA DE COHERENCIA ABSOLUTA EN MARCADOR:
-      Nuestro software ha definido estadísticamente que el "Marcador Proyectado" preciso de goles para este partido es **${targetScore}**.
-      Por tanto, en la sección obligatoria "4. Marcador Proyectado" (y en cualquier conclusión), DEBES poner única y exclusivamente el marcador exacto **${targetScore}** en negrita (e.g. "**${targetScore}**"). No inventes ningún otro resultado numérico.
-      `;
-    }
-
-    const prompt = `
-      Actúa como un experto en análisis predictivo. Justifica de forma profesional el mercado "${stats.topMarket}" (${(stats.topProb * 100).toFixed(0)}%) para el partido ${stats.homeTeam} vs ${stats.awayTeam}.
-      
-      MÉTRICAS:
-      - Forma: ${stats.homeForm.join('')} vs ${stats.awayForm.join('')}
-      - xG Proyectado: ${stats.homeXG.toFixed(2)} vs ${stats.awayXG.toFixed(2)}
-      - Goles: ${stats.homeAvgGoals.toFixed(2)} vs ${stats.awayAvgGoals.toFixed(2)}
-      ${injuriesPrompt ? `\n        ${injuriesPrompt}` : ''}
-      ${consistencyPrompt}
-      
-      ESTRUCTURA (Markdown):
-      1. **Resumen Táctico**: Análisis del momento de ambos (considerando el impacto de posibles bajas clave).
-      2. **Factores Decisivos**: 3 puntos clave.
-      3. **Selección Principal**: Justificación del mercado elegido.
-      4. **Marcador Proyectado**: En negrita coincidiendo exactamente como "**${targetScore}**".
-      
-      IDIOMA: ESPAÑOL. Conciso, profesional.
-    `;
-    
-    const response = await withRetry(() => client.models.generateContent({
+    const prompt = `Experto en Big Data. Justifica el mercado "${stats.topMarket}" (${(stats.topProb * 100).toFixed(0)}%) para ${stats.homeTeam} vs ${stats.awayTeam}. xG: ${stats.homeXG?.toFixed(2)} vs ${stats.awayXG?.toFixed(2)}. MARCADOR: ${targetScore}. Estructura: Métricas, Selección, Marcador. ESPAÑOL.`;
+    const result: any = await withRetry(() => ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }]
     }));
-    
-    const resultText = response.text || "";
-    
-    // Cache Result
-    if (matchId) {
-      aiCache.set(`analysis_${matchId}`, { text: resultText, timestamp: Date.now() });
-      saveAiCache(aiCache);
-    }
-
-    res.json({ text: resultText });
-  } catch (error: any) {
-    const cacheKey = matchId ? String(matchId) : `${stats.homeTeam}-${stats.awayTeam}`;
-
-    const textFallback = `### Justificación de Probabilidades
-**Contexto**: El mercado **${stats.topMarket}** presenta una probabilidad calculada de **${(stats.topProb * 100).toFixed(0)}%** para el cruce entre **${stats.homeTeam}** y **${stats.awayTeam}**.
-
-**Métricas Tácticas**:
-- **Volumen de Goles Esperados (xG)**: El desglose promedio (${stats.homeXG.toFixed(1)} local vs ${stats.awayXG.toFixed(1)} visitante) sugiere situaciones frecuentes en el área defensiva rival.
-- **Forma y Tendencia**: ${stats.homeTeam} arrastra una dinámica de ${stats.homeForm.join(', ')} frente al registro de ${stats.awayForm.join(', ')} de ${stats.awayTeam}.
-
-**Marcador Proyectado**: Se estima una definición de **${targetScore}** en favor de una distribución ordenada de juego.`;
-
-    console.log(`[AI Analysis Serverless] Using stable fallback for analysis_${cacheKey} due to temporary API constraints.`);
-
-    aiCache.set(`analysis_${cacheKey}`, { text: textFallback, timestamp: Date.now() });
-    saveAiCache(aiCache);
-    if (matchId && String(matchId) !== cacheKey) {
-      aiCache.set(`analysis_${matchId}`, { text: textFallback, timestamp: Date.now() });
-      saveAiCache(aiCache);
-    }
-
-    return res.json({ text: textFallback });
+    const text = result.text;
+    aiCache.set(cacheKey, { text, timestamp: Date.now() });
+    return res.json({ text });
+  } catch (error) {
+    console.log(`[AI Analysis Fallback] Applied for ${stats.homeTeam}`);
+    return res.json({ text: `### Resumen de Inteligencia\n\nAnálisis algorítmico respalda la selección de **${stats.topMarket}** basado en eficiencia ofensiva.\n\n**Marcador Proyectado**: **${targetScore}**.` });
   }
 });
 
-// Proxy for /api/v2
-app.all(["/api/v2", "/api/v2/*"], async (req, res) => {
-  if (req.method !== "GET") {
-    return res.status(403).json({ error: "Acceso denegado. Solo se permiten solicitudes GET." });
-  }
-
+// [GET] /api/v2 Proxy (Sports Data)
+app.get("/api/v2/*", async (req: Request, res: Response) => {
   const apiKey = process.env.BZZOIRO_API_KEY || '';
-  if (!apiKey) {
-    console.warn('[API Proxy Serverless] BZZOIRO_API_KEY no configurada');
-  }
-
   const endpoint = req.originalUrl.replace("/api/v2", "");
-  const normalizedEndpoint = (endpoint.startsWith("/") || endpoint === "") ? endpoint : `/${endpoint}`;
+  const targetUrl = `https://sports.bzzoiro.com/api/v2${endpoint}`;
 
-  const endpointPath = normalizedEndpoint.split('?')[0];
-  const isSafePath = /^[a-zA-Z0-9_\-\/()%\s]+$/.test(decodeURIComponent(endpointPath));
-  if (!isSafePath) {
-    return res.status(403).json({ error: "Acceso denegado. Path con caracteres no permitidos." });
+  try {
+    const response = await fetch(targetUrl, {
+      headers: { ...(apiKey ? { "Authorization": `Token ${apiKey}` } : {}), "Accept": "application/json" }
+    });
+    const buffer = await response.arrayBuffer();
+    res.status(response.status).send(Buffer.from(buffer));
+  } catch (error: any) {
+    res.status(502).json({ error: "Sports API Error", details: error.message });
   }
-
-  const targetUrl = `https://sports.bzzoiro.com/api/v2${normalizedEndpoint}`;
-
-  const doProxy = async (retries: number): Promise<void> => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 40000); // 40s timeout for serverless
-
-      const authHeader = apiKey ? `Token ${apiKey}` : undefined;
-
-      const response = await fetch(targetUrl, {
-        method: req.method,
-        headers: {
-          ...(authHeader ? { "Authorization": authHeader } : {}),
-          "Content-Type": req.headers["content-type"] || "application/json",
-          "Accept": "application/json",
-        },
-        body: undefined,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.status >= 500 && retries > 0) {
-        return doProxy(retries - 1);
-      }
-
-      res.status(response.status);
-      response.headers.forEach((value, key) => {
-        const lowerKey = key.toLowerCase();
-        if (!['content-encoding', 'content-length', 'connection', 'transfer-encoding', 'access-control-allow-origin', 'set-cookie'].includes(lowerKey)) {
-          res.setHeader(key, value);
-        }
-      });
-
-      const buffer = await response.arrayBuffer();
-      res.send(Buffer.from(buffer));
-    } catch (error: any) {
-      if (retries > 0) {
-        return doProxy(retries - 1);
-      }
-      res.status(502).json({ 
-        error: "Error de conexión con el proveedor externo",
-        details: error.message 
-      });
-    }
-  };
-
-  doProxy(1);
 });
 
 export default app;
