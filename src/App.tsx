@@ -23,7 +23,10 @@ function App() {
     triggerImmediateSync,
     v2Predictions,
     enrichedData,
-    frozenPredictions
+    frozenPredictions,
+    loading,
+    isRefreshing,
+    refreshAll
   } = useMatchStore();
 
   return (
@@ -46,6 +49,9 @@ function App() {
       v2Predictions={v2Predictions || []}
       enrichedData={enrichedData || {}}
       frozenPredictions={frozenPredictions || {}}
+      loading={loading}
+      isRefreshing={isRefreshing}
+      refreshAll={refreshAll}
     />
   );
 }

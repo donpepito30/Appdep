@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { api } from '../services/api';
+import { api, clearApiCache } from '../services/api';
 import { Event, Stats, Prediction, Incident, TeamForm, OddMarket, LineupData, EventMetadata, PlayerMatchStats, EnrichedEventData } from '../types';
 import { calculateHybridPrediction, calculateMomentum, calculatePoissonModel } from '../lib/prediction';
 
@@ -10,10 +10,14 @@ export const dayLabels = {
   later: '📋 PRÓXIMOS'
 };
 
-const getDateCategory = (dateStr: string): 'today' | 'tomorrow' | 'dayAfter' | 'later' => {
-  const date = new Date(dateStr);
-  const now = new Date();
+const getDateCategory = (dateStr: string, status?: string): 'today' | 'tomorrow' | 'dayAfter' | 'later' => {
+  if (status === 'LIVE') return 'today';
+  if (!dateStr) return 'today';
   
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return 'today';
+  
+  const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
@@ -22,7 +26,7 @@ const getDateCategory = (dateStr: string): 'today' | 'tomorrow' | 'dayAfter' | '
   
   const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   
-  if (target.getTime() === today.getTime()) return 'today';
+  if (target.getTime() <= today.getTime()) return 'today';
   if (target.getTime() === tomorrow.getTime()) return 'tomorrow';
   if (target.getTime() === dayAfter.getTime()) return 'dayAfter';
   return 'later';
@@ -414,6 +418,56 @@ const stopPolling = () => {
   }
 };
 
+let g_isRefreshing = false;
+
+export const refreshAll = async (force = true) => {
+  if (g_isRefreshing) return;
+  g_isRefreshing = true;
+  emit();
+  
+  try {
+    if (force) {
+      clearApiCache();
+    }
+    
+    const [events, upcoming, v2Preds] = await Promise.all([
+      api.getLiveEvents(),
+      api.getPredictionsPrimaryEvents(),
+      api.getV2Predictions()
+    ]);
+
+    g_matches = events || [];
+    g_upcomingMatches = upcoming || [];
+    g_v2Predictions = v2Preds || [];
+    
+    fetchMissingData(g_matches.concat(g_upcomingMatches, (v2Preds || []).map(p => p.event)));
+    
+    const allMatches = [...g_matches, ...g_upcomingMatches];
+    if (!g_selectedMatchId || !allMatches.some(m => m.id === g_selectedMatchId)) {
+      if (g_matches.length > 0) {
+        g_selectedMatchId = g_matches[0].id;
+      } else if (g_upcomingMatches.length > 0) {
+        g_selectedMatchId = g_upcomingMatches[0].id;
+      }
+    }
+    
+    if (g_selectedMatchId) {
+      await syncMatchDetail(g_selectedMatchId, { stats: true, slow: true, forms: true });
+    }
+    
+    if (g_upcomingMatches.length > 0) {
+      enrichEventsInParallel(g_upcomingMatches);
+    }
+    g_apiError = null;
+  } catch (err: any) {
+    console.error("Refresh error:", err);
+  } finally {
+    g_loading = false;
+    g_isRefreshing = false;
+    emit();
+  }
+};
+
 const pollEvents = async () => {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     return;
@@ -425,13 +479,8 @@ const pollEvents = async () => {
       api.getPredictionsPrimaryEvents()
     ]);
     
-    const updatedEvents = fresh.filter(e => {
-      const existing = g_matches.find(m => m.id === e.id);
-      return !existing || !existing.last_updated || (e.last_updated && new Date(e.last_updated) > new Date(existing.last_updated));
-    });
-
     let changed = false;
-    if (updatedEvents.length > 0) {
+    if (fresh) {
       g_matches = fresh;
       fetchMissingData(fresh);
       changed = true;
@@ -705,7 +754,7 @@ export function useMatchStore() {
     };
     
     unique.forEach(m => {
-      const cat = getDateCategory(m.startTime);
+      const cat = getDateCategory(m.startTime, m.status);
       groups[cat].push(m);
     });
     
@@ -737,6 +786,8 @@ export function useMatchStore() {
     frozenPredictions: g_frozenPredictions,
     lastStats: g_lastStats,
     loading: g_loading,
+    isRefreshing: g_isRefreshing,
+    refreshAll,
     apiError: g_apiError
   };
 }

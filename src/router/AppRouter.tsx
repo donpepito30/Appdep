@@ -101,6 +101,9 @@ interface AppRouterProps {
   v2Predictions: { event: Event; prediction: any }[];
   enrichedData: Record<string, any>;
   frozenPredictions: Record<string, any>;
+  loading?: boolean;
+  isRefreshing?: boolean;
+  refreshAll?: (force?: boolean) => Promise<void>;
 }
 
 export function AppRouter({
@@ -121,7 +124,10 @@ export function AppRouter({
   triggerImmediateSync,
   v2Predictions,
   enrichedData,
-  frozenPredictions
+  frozenPredictions,
+  loading = false,
+  isRefreshing = false,
+  refreshAll
 }: AppRouterProps) {
   const { 
     activeTab, 
@@ -200,6 +206,12 @@ export function AppRouter({
     setActiveTab('live');
     setIsMobileMenuOpen(false);
   };
+
+  useEffect(() => {
+    if (!loading && liveCount === 0 && headerTab === 'live' && (groupedByDay.today?.length > 0 || upcomingMatches.length > 0)) {
+      setHeaderTab('today');
+    }
+  }, [loading, liveCount, groupedByDay.today?.length, upcomingMatches.length]);
 
   const toggleLeague = (league: string) => {
     setCollapsedLeagues(prev => ({ ...prev, [league]: !prev[league] }));
@@ -290,22 +302,38 @@ export function AppRouter({
         </h2>
         
         {Object.keys(groups).length === 0 ? (
-          <div className="p-4 text-center text-brand-text-muted text-sm space-y-2">
-            <svg 
-              className="w-6 h-6 mx-auto opacity-20"
-              xmlns="http://www.w3.org/2000/svg" 
-              width="24" 
-              height="24" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-            >
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-            <p>No hay partidos</p>
+          <div className="p-5 text-center text-brand-text-muted text-sm space-y-3 bg-brand-bg-card/40 rounded-2xl border border-white/5 my-2">
+            <div className="w-10 h-10 rounded-full bg-white/5 mx-auto flex items-center justify-center text-lg">
+              ⚽
+            </div>
+            <p className="font-bold text-white text-xs">
+              {headerTab === 'live' ? 'No hay partidos en vivo en este momento' : 'No hay partidos disponibles'}
+            </p>
+            <p className="text-[10px] text-brand-text-muted">
+              {headerTab === 'live' 
+                ? 'Puedes consultar los partidos programados para hoy o actualizar.' 
+                : 'Intenta actualizar los datos o cambiar de pestaña.'}
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              {headerTab === 'live' && (
+                <button
+                  onClick={() => handleTabClick('today')}
+                  className="px-3 py-1.5 bg-brand-green text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                >
+                  Ver Partidos de Hoy
+                </button>
+              )}
+              {refreshAll && (
+                <button
+                  onClick={() => refreshAll(true)}
+                  disabled={isRefreshing}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg border border-white/10 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={cn("w-3 h-3", isRefreshing && "animate-spin text-brand-green")} />
+                  <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+                </button>
+              )}
+            </div>
           </div>
         ) : null}
 
@@ -447,6 +475,23 @@ export function AppRouter({
 
           {getStatusIndicator(apiStatus)}
 
+          {refreshAll && (
+            <button
+              onClick={() => refreshAll(true)}
+              disabled={isRefreshing}
+              title="Actualizar datos y cuotas en tiempo real"
+              className={cn(
+                "flex items-center space-x-1.5 px-2.5 md:px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-wider transition-all border cursor-pointer select-none",
+                isRefreshing 
+                  ? "bg-brand-green/20 border-brand-green/40 text-brand-green cursor-wait"
+                  : "bg-white/5 hover:bg-brand-green/10 border-white/10 hover:border-brand-green/30 text-brand-text-muted hover:text-brand-green active:scale-95"
+              )}
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin text-brand-green")} />
+              <span className="hidden sm:inline">{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="md:hidden flex flex-col justify-center items-center w-8 h-8 rounded-lg bg-white/5 border border-white/5 active:scale-90 transition-transform cursor-pointer"
@@ -538,6 +583,20 @@ export function AppRouter({
                     )}>Seleccionar →</span>
                   </button>
                 ))}
+
+                {refreshAll && (
+                  <button
+                    onClick={() => {
+                      refreshAll(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    disabled={isRefreshing}
+                    className="w-full p-4 rounded-2xl border border-brand-green/30 bg-brand-green/10 text-brand-green text-xs font-black uppercase tracking-wider flex items-center justify-center space-x-2 active:scale-95 transition-all cursor-pointer mt-2"
+                  >
+                    <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+                    <span>{isRefreshing ? 'Actualizando datos...' : 'Actualizar Datos Ahora'}</span>
+                  </button>
+                )}
               </div>
             </motion.div>
           </>

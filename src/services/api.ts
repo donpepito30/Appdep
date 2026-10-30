@@ -13,6 +13,13 @@ export const logoCache: Record<string, string | null> = {};
 export const nameCache: Record<string, string | null> = {};
 export const fallosLogos = new Set<string>();
 
+export function clearApiCache() {
+  for (const k in failCache) delete failCache[k];
+  for (const k in respuestasCache) delete respuestasCache[k];
+  fallosLogos.clear();
+  inFlight.clear();
+}
+
 /**
  * Optimized image proxy URL generator
  * Types: team, league, player, manager, venue
@@ -321,8 +328,8 @@ export const api = {
             status: (e.status === 'inprogress' || e.status === 'live') ? 'LIVE' : (e.status === 'finished' ? 'FINISHED' : 'SCHEDULED'),
             leagueName: e.league_name || e.league?.name || e.competition?.name || 'Unknown League',
             leagueId: String(e.league_id || e.league?.id || e.competition?.id || e.competition_id || ''),
-            homeLogo: hLogo,
-            awayLogo: aLogo,
+            homeLogo: hLogo || getImgUrl('team', hId) || undefined,
+            awayLogo: aLogo || getImgUrl('team', aId) || undefined,
             xgHome: e.xg_home,
             xgAway: e.xg_away,
             currentMinute: e.current_minute || e.minute,
@@ -1214,8 +1221,8 @@ export const api = {
             status: 'SCHEDULED',
             leagueName: e.competition?.name || e.league?.name || e.leagueName || 'Desconocido',
             leagueId: String(e.league_id || e.league?.id || e.competition?.id || e.competition_id || ''),
-            homeLogo: hLogo,
-            awayLogo: aLogo,
+            homeLogo: hLogo || getImgUrl('team', hId) || undefined,
+            awayLogo: aLogo || getImgUrl('team', aId) || undefined,
             homeTeamId: hId,
             awayTeamId: aId,
             last_updated: e.last_updated
